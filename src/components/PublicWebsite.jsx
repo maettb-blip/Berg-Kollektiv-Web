@@ -1,0 +1,506 @@
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp } from "firebase/firestore";
+import { FileText, Tag } from 'lucide-react';
+
+// ==========================================
+// FIREBASE KONFIGURATION
+// ==========================================
+const firebaseConfig = {
+    apiKey: "AIzaSyDaiMO8pVyDPNut5HzHw9-kj6aldyBi36Q",
+    authDomain: "berk-kollektiv.firebaseapp.com",
+    projectId: "berk-kollektiv",
+    storageBucket: "berk-kollektiv.firebasestorage.app",
+    messagingSenderId: "339999917389",
+    appId: "1:339999917389:web:006588c1030742f6c62304",
+    measurementId: "G-J0YRE7EC1D"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const Instagram = (props) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+);
+
+const TEAM = [
+    { name: "ADRIAN BÜSCHLEN", title: "BERGFÜHRER IVBV", desc: "Skifanatiker und Bergführer aus Leidenschaft. Liebt steile Flanken und technische Grate.", image: "/adrian.jpg" },
+    { name: "JENS Schärer", title: "BERGFÜHRER IVBV", desc: "Spezialist für Eisklettern und winterliche Expeditionen. Sucht immer die perfekte Linie im Eis.", image: "/jens.jpg" },
+    { name: "MATTHIAS Bettschen", title: "BERGFÜHRER IVBV", desc: "Kletterexperte im Granit und Kalk. Vermittelt Technik und Freude am Fels mit grosser Geduld.", image: "/matthias.jpg" }
+];
+
+const ANGEBOT_SOMMER = [
+    { id: "s1", title: "Hochtouren", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", image: "/hochtour.jpg", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen." },
+    { id: "s2", title: "Alpinklettern", desc: "In den besten Granit- und Kalkwänden der Schweiz.", image: "/alpinklettern.jpg", longDesc: "Mehrseillängen-Träume in bestem Fels. Von der Furka bis ins Bergell – wir finden die perfekte Linie für dein Level." },
+    { id: "s3", title: "Kletterkurse", desc: "Vom ersten Griff in der Halle bis zum Vorstieg im Fels.", image: "/kletterkurs.jpg", longDesc: "Sicherheit steht an erster Stelle. Wir vermitteln dir das nötige Know-how in Seiltechnik, Standplatzbau und Vorstiegstaktik." },
+    { id: "s4", title: "Gratüberschreitungen", desc: "Luftige Grate und endlose Aussichten.", image: "/grat.jpg", longDesc: "Die eleganteste Art, einen Gipfel zu besteigen. Klassiker wie der Eiger- oder Biancograt warten auf dich." }
+];
+
+const ANGEBOT_WINTER = [
+    { id: "w1", title: "Skitouren", desc: "Unberührter Pulverschnee und einsame Gipfelerlebnisse.", image: "/skitour.jpg", longDesc: "Vom Berner Oberland bis ins Wallis – wir finden für dich den besten Powder und unverspurte Hänge fernab der Massen." },
+    { id: "w2", title: "Eisklettern", desc: "Die faszinierende Welt der gefrorenen Wasserfälle.", image: "/eisklettern.jpg", longDesc: "Steile Eiszapfen und blaues Eis. Wir zeigen dir die richtige Schlagtechnik und den Standplatzbau." },
+    { id: "w3", title: "Freeriden", desc: "Die besten Lines in den Alpen mit Fokus auf Sicherheit.", image: "/freeride.jpg", longDesc: "Maximale Abfahrt bei minimalem Aufstieg. Wir nutzen die Bergbahnen und zeigen dir die versteckten Runs." },
+    { id: "w4", title: "Lawinenkurse", desc: "Fundiertes Wissen für deine Sicherheit im Backcountry.", image: "/lawine.jpg", longDesc: "Prävention, Beobachtung und Rettung. Ein essenzieller Kurs für alle, die sich im Winter abseits der Pisten bewegen." }
+];
+
+const Accordion = ({ title, content }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    if (!content) return null;
+    return (
+        <div className="border-b border-zinc-100 py-4">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center group focus:outline-none">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-zinc-400 group-hover:text-black transition-colors">{title}</h3>
+                <span className="text-xl font-light text-zinc-400 group-hover:text-black transition-colors">{isOpen ? '−' : '+'}</span>
+            </button>
+            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[1000px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+                <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line pb-4">{content}</p>
+            </div>
+        </div>
+    );
+};
+
+export default function PublicWebsite({ touren = [], onGoToAdmin }) {
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isScrolled, setIsScrolled] = useState(false);
+    const [angebotTab, setAngebotTab] = useState('sommer');
+    const [selectedAngebot, setSelectedAngebot] = useState(null);
+    const [selectedTour, setSelectedTour] = useState(null);
+    const [isBookingMode, setIsBookingMode] = useState(false);
+    const [isLightboxOpen, setIsLightboxOpen] = useState(null);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [bookingStatus, setBookingStatus] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => setIsScrolled(window.scrollY > 100);
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (isLightboxOpen === null || !selectedTour) return;
+            const imgs = selectedTour.images || [selectedTour.image];
+            if (imgs.length <= 1) return;
+            if (e.key === 'ArrowRight') setIsLightboxOpen((prev) => (prev + 1) % imgs.length);
+            else if (e.key === 'ArrowLeft') setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length);
+            else if (e.key === 'Escape') setIsLightboxOpen(null);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isLightboxOpen, selectedTour]);
+
+    useEffect(() => {
+        let timer;
+        if (selectedTour) {
+            const images = selectedTour.images || [selectedTour.image];
+            if (images.length > 1) {
+                timer = setInterval(() => setCurrentImageIndex((prev) => (prev + 1) % images.length), 5000);
+            }
+        } else setCurrentImageIndex(0);
+        return () => clearInterval(timer);
+    }, [selectedTour]);
+
+    const handleAnfrage = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const data = {
+            thema: selectedAngebot.title,
+            vorname: fd.get('vorname'), 
+            name: fd.get('name'), 
+            email: fd.get('email'),
+            nachricht: fd.get('nachricht'), 
+            timestamp: serverTimestamp()
+        };
+
+        try {
+            await addDoc(collection(db, 'anfragen'), data);
+            
+            // EmailJS: Kontakt-Anfrage senden
+            if (window.emailjs) {
+                await window.emailjs.send(
+                    "service_b02rsz7", 
+                    "template_ewn7qhm", 
+                    {
+                        vorname: data.vorname,
+                        name: data.name,
+                        email: data.email,
+                        thema: data.thema,
+                        nachricht: data.nachricht
+                    }, 
+                    "tr07IrpBTKjp_Isq6"
+                );
+            }
+
+            setBookingStatus("Anfrage erfolgreich gesendet! Eine Bestätigung ist zu dir unterwegs.");
+            setTimeout(() => { setSelectedAngebot(null); setBookingStatus(null); }, 3000);
+        } catch (err) { 
+            console.error(err);
+            alert("Fehler beim Senden der Anfrage. Bitte versuche es später erneut."); 
+        }
+    };
+
+    const handleBooking = async (e) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        const fd = new FormData(e.target);
+
+        if (!fd.get('agb_accept')) {
+            alert("Bitte akzeptiere die AGB, um fortzufahren.");
+            setIsSubmitting(false);
+            return;
+        }
+
+        const data = {
+            tourId: selectedTour.id, 
+            tourTitle: selectedTour.title,
+            name: fd.get('name'), 
+            vorname: fd.get('vorname'), 
+            adresse: fd.get('adresse'),
+            plz_ort: `${fd.get('plz')} ${fd.get('ort')}`,
+            email: fd.get('email'), 
+            phone: fd.get('phone'),
+            geburtstag: fd.get('geburtstag'), 
+            ernaehrung: fd.get('ernaehrung'), 
+            besonderes: fd.get('besonderes'),
+            timestamp: serverTimestamp()
+        };
+
+        try {
+            if (!selectedTour.id.startsWith('mock-')) {
+                await addDoc(collection(db, 'anmeldungen'), data);
+                await updateDoc(doc(db, 'touren', selectedTour.id), { angemeldet: increment(1) });
+                
+                // EmailJS: Touren-Anmeldung senden
+                if (window.emailjs) {
+                    await window.emailjs.send(
+                        "service_b02rsz7", 
+                        "template_1uovyru", 
+                        {
+                            vorname: data.vorname,
+                            name: data.name,
+                            email: data.email,
+                            tour_title: data.tourTitle,
+                            tour_date: selectedTour.date,
+                            price: selectedTour.price
+                        }, 
+                        "tr07IrpBTKjp_Isq6"
+                    );
+                }
+            }
+            setBookingStatus("Herzlichen Dank! Die Bestätigung deiner Anmeldung ist zu dir unterwegs.");
+            setTimeout(() => { setSelectedTour(null); setIsBookingMode(false); setBookingStatus(null); setIsSubmitting(false); }, 4000);
+        } catch (err) {
+            console.error(err);
+            setBookingStatus("Anmeldung gespeichert, aber Mail-Versand fehlgeschlagen.");
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-bg text-accent selection:bg-black selection:text-white">
+            {/* INJEKTION DER SCHRIFTART FÜR DIE SERIF ÜBERSCHRIFTEN */}
+            <style dangerouslySetInnerHTML={{__html: `
+                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+                body { font-family: 'Outfit', sans-serif !important; }
+                .serif { font-family: 'Playfair Display', serif !important; }
+            `}} />
+
+            <nav className="fixed w-full z-50 px-6 md:px-12 py-8 flex justify-between items-center text-white mix-blend-difference">
+                <div className="text-lg md:text-xl tracking-[0.3em] uppercase cursor-pointer z-50" onClick={() => window.scrollTo(0,0)}>
+                    BERG <span className="font-bold">KOLLEKTIV</span>
+                </div>
+                <div className="hidden md:flex space-x-12 text-[10px] uppercase tracking-[0.2em]">
+                    <a href="#angebot" className="nav-link">Angebot</a>
+                    <a href="#touren" className="nav-link">Aktuelle Touren</a>
+                    <a href="#kollektiv" className="nav-link">Kollektiv</a>
+                    <a href="#kontakt" className="nav-link">Kontakt</a>
+                    <button onClick={onGoToAdmin} className="opacity-30 hover:opacity-100 transition border-l border-white/20 pl-6">Admin</button>
+                </div>
+                <button 
+                    className={`md:hidden z-50 relative text-xl w-10 h-10 flex items-center justify-center backdrop-blur-md rounded-full border border-white/20 text-white drop-shadow-md transition-all ${!isMobileMenuOpen && isScrolled ? 'bg-black/60' : 'bg-black/20'}`}
+                    onClick={() => !isMobileMenuOpen && isScrolled ? window.scrollTo({ top: 0, behavior: 'smooth' }) : setIsMobileMenuOpen(!isMobileMenuOpen)}
+                >
+                    {isMobileMenuOpen ? '✕' : (isScrolled ? '↑' : '☰')}
+                </button>
+                <div className={`fixed inset-0 bg-black/98 backdrop-blur-lg flex flex-col items-center justify-center space-y-10 transition-all duration-500 md:hidden z-40 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                    {['angebot', 'touren', 'kollektiv', 'kontakt'].map(link => (
+                        <a key={link} href={`#${link}`} onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-light uppercase tracking-[0.2em] text-white hover:text-zinc-400 transition-colors">{link}</a>
+                    ))}
+                    <button onClick={() => { onGoToAdmin(); setIsMobileMenuOpen(false); }} className="text-xs uppercase tracking-[0.2em] text-zinc-500 mt-12 pt-8 border-t border-zinc-800">Admin Login</button>
+                </div>
+            </nav>
+
+            <main className="fade-in">
+                <header className="relative h-screen flex items-center justify-center bg-black overflow-hidden px-4">
+                    <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover opacity-60 grayscale">
+                        <source src="/hero-video.mp4" type="video/mp4" />
+                    </video>
+                    <div className={`relative z-10 text-center text-white w-full max-w-[95vw] mx-auto mix-blend-difference transition-all duration-500 ${isMobileMenuOpen ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+                        <p className="uppercase tracking-[0.6em] text-[10px] mb-8 opacity-70">Bergführer IVBV</p>
+                        <h1 className="font-normal leading-tight whitespace-nowrap text-[4.8vw] sm:text-[4vw] md:text-[3.5vw] lg:text-5xl xl:text-6xl uppercase tracking-[0.1em] sm:tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em]">
+                            Berg &nbsp;·&nbsp; Mensch &nbsp;·&nbsp; Erlebnis
+                        </h1>
+                    </div>
+                </header>
+
+                <section id="angebot" className="py-32 px-6 bg-white">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="text-center mb-20">
+                            <h2 className="serif text-4xl italic mb-6">Unser Angebot</h2>
+                            <div className="flex justify-center space-x-12 text-sm md:text-base font-semibold uppercase tracking-widest">
+                                <button onClick={() => setAngebotTab('sommer')} className={`pb-2 opacity-40 transition-all ${angebotTab === 'sommer' ? 'border-b-2 border-black opacity-100' : ''}`}>Sommer</button>
+                                <button onClick={() => setAngebotTab('winter')} className={`pb-2 opacity-40 transition-all ${angebotTab === 'winter' ? 'border-b-2 border-black opacity-100' : ''}`}>Winter</button>
+                            </div>
+                        </div>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        {(angebotTab === 'sommer' ? ANGEBOT_SOMMER : ANGEBOT_WINTER).map((item, i) => (
+                            <div key={i} onClick={() => setSelectedAngebot(item)} className="p-8 border border-zinc-100 bg-[#fdfdfc] cursor-pointer hover:border-black transition-all group flex flex-col justify-between min-h-[250px]">
+                                <div>
+                                    <h3 className="serif text-xl italic mb-4 group-hover:translate-x-1 transition-transform">{item.title}</h3>
+                                    <p className="text-zinc-500 text-xs leading-relaxed font-light">{item.desc}</p>
+                                </div>
+                                <div className="mt-6 pt-4 border-t border-zinc-50 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <p className="text-[8px] uppercase tracking-widest text-zinc-400">Details & Anfrage →</p>
+                                </div>
+                            </div>
+                        ))}
+                        </div>
+                    </div>
+                </section>
+
+                <section id="touren" className="py-32 px-6 md:px-12 bg-[#f9f9f7]">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="flex justify-between items-end mb-20 border-b border-zinc-200 pb-8">
+                            <h2 className="serif text-4xl italic">Aktuelle Touren</h2>
+                            <p className="uppercase tracking-widest text-[10px] text-zinc-400">Fixdaten & Anmeldung</p>
+                        </div>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-20">
+                            {touren && touren.filter(t => t.visible !== false).map(tour => (
+                                <div key={tour.id} className="tour-card group cursor-pointer" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); }}>
+                                    <div className="aspect-[4/5] overflow-hidden bg-zinc-100 mb-8 grayscale group-hover:grayscale-0 transition-all duration-1000 relative">
+                                        <img src={tour.image} className="w-full h-full object-cover" loading="lazy" alt={tour.title} />
+                                        <div className="absolute top-4 right-4 bg-white/95 px-4 py-2 text-[8px] uppercase tracking-[0.2em] font-bold">
+                                            {tour.maxPlaetze - tour.angemeldet > 0 ? `${tour.maxPlaetze - tour.angemeldet} Plätze` : 'Voll'}
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-start">
+                                        <div className="transform transition-transform duration-500 group-hover:translate-x-3">
+                                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{tour.date}</p>
+                                            <h3 className="text-xl font-light mb-2 tracking-wide uppercase">{tour.title}</h3>
+                                            <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold">{tour.price}</p>
+                                        </div>
+                                        <div className="pt-4 flex items-center h-full"><div className="w-8 h-px bg-black transition-all duration-500 ease-out group-hover:w-16"></div></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+                <section id="kollektiv" className="py-40 px-6 bg-white">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="text-center mb-24"><h2 className="serif text-4xl italic">Das Kollektiv</h2></div>
+                        <div className="grid md:grid-cols-3 gap-16 md:gap-8 lg:gap-16">
+                            {TEAM.map((member, i) => (
+                                <div key={i} className="text-center flex flex-col items-center group cursor-pointer">
+                                    <div className="team-img-container aspect-[4/5] w-full bg-zinc-100 mb-10 overflow-hidden">
+                                        <img src={member.image} alt={member.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
+                                    </div>
+                                    <div className="space-y-4 max-w-[280px]">
+                                        <h3 className="text-[11px] font-bold uppercase tracking-[0.3em]">{member.name}</h3>
+                                        <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-medium">{member.title}</p>
+                                        <div className="h-px w-8 bg-zinc-200 mx-auto my-6"></div>
+                                        <p className="text-zinc-500 text-[10px] leading-loose font-light tracking-wide uppercase">{member.desc}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+                <footer id="kontakt" className="py-32 md:py-48 bg-[#f9f9f7] border-t border-zinc-100 px-6">
+                    <div className="max-w-7xl mx-auto flex flex-col items-center">
+                        <p className="uppercase tracking-[0.5em] text-[10px] mb-12 opacity-50 text-center">Kontaktiere uns</p>
+                        <a href="mailto:hallo@bergkollektiv.ch" className="serif text-3xl md:text-6xl italic hover:text-zinc-400 transition-colors duration-500 block text-center mb-20">hallo@bergkollektiv.ch</a>
+                        <div className="w-full grid md:grid-cols-3 gap-12 items-center">
+                            <div className="flex flex-col items-center md:items-start space-y-6">
+                                <a href="https://www.instagram.com/" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
+                                    <Instagram size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Instagram</span>
+                                </a>
+                                <a href="/agb.pdf" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
+                                    <FileText size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Allgemeine Geschäftsbedingungen</span>
+                                </a>
+                                <a href="/tarife.pdf" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
+                                    <Tag size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Allgemeine Tarife</span>
+                                </a>
+                            </div>
+                            <div className="flex flex-col items-center space-y-4">
+                                <img src="/Logo IVBV negativ.svg" alt="IVBV Logo" className="h-20 w-auto object-contain grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-500" />
+                                <p className="text-[8px] uppercase tracking-[0.3em] text-zinc-400 text-center">Internationaler Verband der<br/>Bergführervereinigungen</p>
+                            </div>
+                            <div className="flex flex-col items-center md:items-end text-center md:text-right space-y-2">
+                                <div className="text-lg tracking-[0.3em] uppercase mb-4">BERG <span className="font-bold">KOLLEKTIV</span></div>
+                                <p className="text-[8px] uppercase tracking-widest text-zinc-400">&copy; 2026 Berg Kollektiv<br/>Alle Rechte vorbehalten.</p>
+                                <button onClick={() => { onGoToAdmin && onGoToAdmin(); window.scrollTo(0,0); }} className="mt-6 text-[8px] uppercase tracking-[0.2em] text-zinc-300 hover:text-black transition-colors md:hidden">— Admin Login —</button>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+            </main>
+
+            {/* Modals für Angebote & Touren */}
+            {selectedAngebot && (
+                <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedAngebot(null)}></div>
+                    <div className="relative bg-white w-full h-full md:max-h-[90vh] md:max-w-2xl shadow-2xl overflow-y-auto fade-in">
+                        <div className="h-80 md:h-[40vh] relative">
+                            <img src={selectedAngebot.image} className="w-full h-full object-cover" alt="" />
+                            <button onClick={() => setSelectedAngebot(null)} className="absolute top-6 right-6 text-white text-3xl z-10">&times;</button>
+                            <div className="absolute inset-0 bg-black/30 flex items-end p-8"><h2 className="serif text-4xl italic text-white">{selectedAngebot.title}</h2></div>
+                        </div>
+                        <div className="p-8 md:p-12">
+                            {bookingStatus ? ( <div className="text-center py-12 serif italic text-xl">{bookingStatus}</div> ) : (
+                                <div className="space-y-10">
+                                    <p className="text-zinc-600 text-sm leading-relaxed font-light">{selectedAngebot.longDesc}</p>
+                                    <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100">
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors" />
+                                            <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors" />
+                                        </div>
+                                        <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors" />
+                                        <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors h-28" />
+                                        <button type="submit" className="w-full bg-black text-white py-5 text-[9px] uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all">Anfrage Senden</button>
+                                    </form>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {selectedTour && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedTour(null)}></div>
+                    <div className="relative bg-white w-full max-w-2xl h-full md:h-[95vh] shadow-2xl overflow-y-auto fade-in">
+                        <div className="h-[50vh] md:h-[60vh] overflow-hidden relative flex-shrink-0 cursor-pointer" onClick={() => setIsLightboxOpen(currentImageIndex)}>
+                            {(selectedTour.images || [selectedTour.image]).map((img, idx) => (
+                                <div key={idx} className={`absolute inset-0 transition-opacity duration-1000 ${idx === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}>
+                                    <img src={img} className="absolute inset-0 w-full h-full object-cover" alt="" />
+                                </div>
+                            ))}
+                            <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end">
+                                <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)] pointer-events-none"></div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-transparent z-[21]"></div>
+                                <div className="relative z-[30] p-8 md:p-12">
+                                    <p className="text-[12px] md:text-[14px] text-black font-bold uppercase tracking-[0.2em] mb-2 opacity-80">{selectedTour.date}</p>
+                                    <h2 className="serif text-2xl md:text-4xl italic text-black leading-tight">{selectedTour.title}</h2>
+                                </div>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedTour(null); }} className="absolute top-6 right-6 text-black text-3xl z-[40] bg-white/20 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md hover:bg-white/40 transition-colors">&times;</button>
+                        </div>
+                        <div className="p-8 md:p-12">
+                            {!isBookingMode ? (
+                                <div className="fade-in space-y-12">
+                                    <div className="space-y-10">
+                                        <div>
+                                            <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Beschreibung</h3>
+                                            <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
+                                        </div>
+                                        <div className="space-y-0 mt-8">
+                                            <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />
+                                            <Accordion title="Anforderungen" content={selectedTour.anforderungen || 'Nach Absprache.'} />
+                                        </div>
+                                        <div className="grid md:grid-cols-2 gap-6 pt-4">
+                                            <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
+                                                <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-3">Material</p>
+                                                <a href="/packliste.pdf" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-zinc-500 mb-4 underline underline-offset-4"><FileText size={16}/> Material gemäss PDF</a>
+                                                <p className="text-xs text-zinc-500 italic leading-relaxed whitespace-pre-line">{selectedTour.material || 'Keine speziellen Ergänzungen.'}</p>
+                                            </div>
+                                            <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
+                                                <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-2">Preis & Leistungen</p>
+                                                <p className="serif text-2xl italic mb-3">{selectedTour.price}</p>
+                                                <p className="text-xs text-zinc-500 leading-relaxed whitespace-pre-line">{selectedTour.leistungen || 'Führung durch dipl. Bergführer.'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setIsBookingMode(true)} disabled={selectedTour.maxPlaetze <= selectedTour.angemeldet} className={`w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all ${selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800 shadow-xl'}`}>
+                                        {selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'Ausgebucht' : 'Verbindlich Anmelden'}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="fade-in max-w-2xl mx-auto">
+                                    {bookingStatus ? (
+                                        <div className="text-center space-y-8 py-20"><div className="text-4xl">✓</div><p className="serif text-2xl italic">{bookingStatus}</p><button onClick={() => { setSelectedTour(null); setIsBookingMode(false); }} className="text-[10px] uppercase tracking-widest border-b border-black pb-1">Zurück zur Übersicht</button></div>
+                                    ) : (
+                                        <form onSubmit={handleBooking} className="space-y-8">
+                                            <div className="flex justify-between items-end mb-10"><h3 className="serif text-3xl italic">Anmeldung</h3><button type="button" onClick={() => setIsBookingMode(false)} className="text-[10px] uppercase tracking-widest opacity-40 hover:opacity-100 transition">Abbrechen</button></div>
+                                            <div className="grid grid-cols-2 gap-8">
+                                                <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Vorname *</label><input name="vorname" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                                <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Name *</label><input name="name" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                            </div>
+                                            <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Adresse *</label><input name="adresse" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                            <div className="grid grid-cols-2 gap-8">
+                                                <div className="grid grid-cols-3 gap-4 border-b border-zinc-200 pb-2">
+                                                    <div className="col-span-1 space-y-1">
+                                                        <label className="text-[8px] uppercase tracking-widest text-zinc-400">PLZ *</label>
+                                                        <input name="plz" required className="w-full bg-transparent outline-none text-sm" />
+                                                    </div>
+                                                    <div className="col-span-2 space-y-1">
+                                                        <label className="text-[8px] uppercase tracking-widest text-zinc-400">Ort *</label>
+                                                        <input name="ort" required className="w-full bg-transparent outline-none text-sm" />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1 border-b border-zinc-200 pb-2">
+                                                    <label className="text-[8px] uppercase tracking-widest text-zinc-400">Geburtstag *</label>
+                                                    <input type="date" name="geburtstag" required className="w-full bg-transparent outline-none text-sm cursor-pointer" />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-8">
+                                                <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">E-Mail *</label><input type="email" name="email" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                                <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Telefon *</label><input type="tel" name="phone" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                            </div>
+                                            <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Ernährung (Allergien, Vegetarisch...)</label><input name="ernaehrung" className="w-full bg-transparent outline-none text-sm" /></div>
+                                            <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Besonderes / Bemerkungen</label><textarea name="besonderes" rows="2" className="w-full bg-transparent outline-none text-sm resize-none"></textarea></div>
+                                            <div className="flex items-start gap-4 py-6 group cursor-pointer">
+                                                <div className="relative flex items-center">
+                                                    <input type="checkbox" id="agb_check" name="agb_accept" required className="peer appearance-none w-5 h-5 border border-zinc-300 rounded-none bg-white checked:bg-black checked:border-black transition-all cursor-pointer" />
+                                                    <svg className="absolute w-3 h-3 text-white pointer-events-none hidden peer-checked:block left-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                </div>
+                                                <label htmlFor="agb_check" className="text-[10px] text-zinc-500 leading-relaxed uppercase tracking-widest cursor-pointer select-none flex-1">
+                                                    Ich habe die <a href="/agb.pdf" target="_blank" rel="noreferrer" className="underline hover:text-black transition-colors" onClick={(e) => e.stopPropagation()}>allgemeinen Geschäftsbedingungen</a> gelesen und akzeptiere diese. * <span className="block mt-2 text-zinc-400 normal-case italic tracking-normal text-[11px]">Der Abschluss einer Annullationskostenversicherung wird dringend empfohlen.</span>
+                                                </label>
+                                            </div>
+                                            <button type="submit" disabled={isSubmitting} className={`w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all shadow-xl ${isSubmitting ? 'bg-zinc-400 text-white cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800'}`}>
+                                                {isSubmitting ? 'Wird gesendet...' : 'Verbindlich Anmelden'}
+                                            </button>
+                                        </form>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {isLightboxOpen !== null && selectedTour && (
+                <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center p-4 md:p-12 fade-in">
+                    <div className="absolute inset-0" onClick={() => setIsLightboxOpen(null)}></div>
+                    <button onClick={() => setIsLightboxOpen(null)} className="absolute top-8 right-8 text-white text-5xl z-[310]">&times;</button>
+                    {(() => {
+                        const imgs = selectedTour.images || [selectedTour.image];
+                        if (imgs.length <= 1) return null;
+                        return (
+                            <>
+                                <button onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }} className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 text-white text-4xl md:text-6xl z-[310]">&#8249;</button>
+                                <button onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }} className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 text-white text-4xl md:text-6xl z-[310]">&#8250;</button>
+                            </>
+                        );
+                    })()}
+                    <img src={(selectedTour.images || [selectedTour.image])[isLightboxOpen]} className="relative max-w-full max-h-full object-contain z-[310] shadow-2xl transition-all duration-500" onClick={(e) => e.stopPropagation()} alt="" />
+                </div>
+            )}
+        </div>
+    );
+}
