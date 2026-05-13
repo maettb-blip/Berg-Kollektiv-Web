@@ -36,7 +36,7 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [tasks, setTasks] = useState([]);
   const [docs, setDocs] = useState([]);
   const [protocols, setProtocols] = useState([]);
-  const [logs, setLogs] = useState([]); // NEU: System-Journal Logs
+  const [logs, setLogs] = useState([]); 
   
   // Dynamische Settings
   const [docKategorien, setDocKategorien] = useState(['Rechnungen', 'Konzepte', 'Sponsoring', 'Bilder']);
@@ -83,7 +83,7 @@ export default function AdminArea({ user, touren, onLogout }) {
       onSnapshot(collection(db, 'protocols'), snap => setProtocols(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'logs'), snap => {
           const fetchedLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          fetchedLogs.sort((a, b) => b.timestamp - a.timestamp); // Sortierung im Speicher
+          fetchedLogs.sort((a, b) => b.timestamp - a.timestamp); 
           setLogs(fetchedLogs);
       }),
       onSnapshot(doc(db, 'settings', 'dokumente'), snap => { 
@@ -103,7 +103,6 @@ export default function AdminArea({ user, touren, onLogout }) {
     return () => unsubs.forEach(unsub => unsub());
   }, [user]);
 
-  // --- HILFSFUNKTION FÜR DAS JOURNAL ---
   const logAction = async (actionText) => {
     if (!user) return;
     try {
@@ -115,7 +114,6 @@ export default function AdminArea({ user, touren, onLogout }) {
     } catch (e) { console.error("Fehler beim Speichern des Logs", e); }
   };
 
-  // --- CRM LOGIK ---
   const kundenStamm = useMemo(() => {
     const map = {};
     
@@ -164,7 +162,6 @@ export default function AdminArea({ user, touren, onLogout }) {
 
   const filteredKunden = kundenStamm.filter(k => k.name.toLowerCase().includes(kundenSearch.toLowerCase()) || k.vorname.toLowerCase().includes(kundenSearch.toLowerCase()) || k.email.toLowerCase().includes(kundenSearch.toLowerCase()));
 
-  // --- EXPORTE ---
   const exportToExcel = (anmeldungen) => {
     const headers = ["Tour", "Vorname", "Name", "Email", "Telefon", "Adresse", "PLZ/Ort", "Ernaehrung", "Bemerkung", "Status", "Zuständig"];
     const rows = anmeldungen.map(a => [ a.tourTitle, a.vorname, a.name, a.email, `'${a.phone}`, a.adresse, a.plz_ort, a.ernaehrung, (a.besonderes || "").replace(/\n/g, " "), a.status || 'Neu', a.zustaendig || 'Unzugewiesen' ]);
@@ -195,7 +192,6 @@ export default function AdminArea({ user, touren, onLogout }) {
     catch (e) { console.error("Fehler", e); }
   };
 
-  // --- SAVE FUNCTIONS ---
   const saveTour = async (e) => {
     e.preventDefault();
     setIsUploading(true);
@@ -203,14 +199,12 @@ export default function AdminArea({ user, touren, onLogout }) {
     const imageFiles = fd.getAll('tour_files');
     let imageUrls = [];
 
-    // Erstelle einen sicheren Ordnernamen aus dem Titel (z.B. "Piz Palü" -> "piz_pal_")
     const tourTitle = fd.get('title');
     const safeTitleFolder = tourTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'tour';
 
     try {
         if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
             const uploadPromises = Array.from(imageFiles).map(async (file) => {
-                // NEU: Unterordner pro Tour erstellen
                 const storageRef = ref(storage, `touren/${safeTitleFolder}/${Date.now()}-${file.name}`);
                 const snapshot = await uploadBytes(storageRef, file);
                 return await getDownloadURL(snapshot.ref);
@@ -219,8 +213,6 @@ export default function AdminArea({ user, touren, onLogout }) {
         }
         
         const isMock = editingTour && editingTour.id ? editingTour.id.startsWith('mock-') : false;
-
-        // Kombiniere die noch vorhandenen Bilder (alte) mit den neu hochgeladenen
         const combinedImages = [...(editingTour.images || []), ...imageUrls];
 
         const data = {
@@ -233,7 +225,6 @@ export default function AdminArea({ user, touren, onLogout }) {
             anforderungen: fd.get('anforderungen'), 
             ablauf: fd.get('ablauf'), 
             material: fd.get('material'),
-            // Das erste Bild der kombinierten Liste ist das Titelbild
             image: combinedImages[0] || '/hochtour.jpg', 
             images: combinedImages, 
             maxPlaetze: parseInt(fd.get('maxPlaetze')) || 4,
@@ -450,7 +441,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-12 pt-8">
-                    {/* Neue Anmeldungen Info */}
                     <div>
                         <h3 className="serif text-2xl italic mb-6">Letzte Anmeldungen</h3>
                         <div className="space-y-3">
@@ -467,7 +457,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                         </div>
                     </div>
 
-                    {/* Neues System Journal */}
                     <div>
                         <h3 className="serif text-2xl italic mb-6">System Journal <span className="text-[10px] font-normal uppercase tracking-widest text-zinc-400 ml-2">(Wer macht was)</span></h3>
                         <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
@@ -487,10 +476,9 @@ export default function AdminArea({ user, touren, onLogout }) {
               </div>
             )}
 
-            {/* TEAM BEREICH */}
             {adminSubView === 'team' && (
                 <div className="fade-in max-w-3xl">
-                    <div className="flex justify-between items-center mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                         <h3 className="serif text-3xl italic">Internes Team verwalten</h3>
                     </div>
                     <p className="text-sm text-zinc-500 mb-8">Verwalte hier die Personen in eurem Team. Diese Namen stehen anschliessend in den Dropdowns für "Zuständig" bei den Aufgaben, Anfragen und als Stamm-Bergführer im Kundenstamm zur Auswahl.</p>
@@ -517,9 +505,9 @@ export default function AdminArea({ user, touren, onLogout }) {
                             logAction(`Teammitglied hinzugefügt: ${neuesTeamMitglied.trim()}`);
                             setNeuesTeamMitglied('');
                         }
-                    }} className="flex gap-4 p-4 border border-zinc-100 bg-[#f9f9f7]">
+                    }} className="flex flex-col sm:flex-row gap-4 p-4 border border-zinc-100 bg-[#f9f9f7]">
                         <input value={neuesTeamMitglied} onChange={e => setNeuesTeamMitglied(e.target.value)} placeholder="Neues Teammitglied (Name)..." className="flex-1 border border-zinc-200 p-3 text-sm outline-none bg-white" />
-                        <button type="submit" className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest">Hinzufügen</button>
+                        <button type="submit" className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest w-full sm:w-auto">Hinzufügen</button>
                     </form>
                 </div>
             )}
@@ -533,13 +521,13 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     <h3 className="serif text-3xl italic">Kundenstamm</h3>
                                     <p className="text-[10px] uppercase tracking-widest text-zinc-400 mt-1">{filteredKunden.length} Kontakte gefiltert</p>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2 w-full md:w-auto">
                                     <button onClick={() => { setSelectedKunde({ email: '', vorname: '', name: '', phone: '', adresse: '', plz: '', ort: '', stammkunde_von: '', touren: [], anfragen: [], isNew: true }); setIsEditingKunde(true); }} className="bg-white border border-zinc-300 px-4 py-2 text-[9px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50 font-bold"><Plus size={14}/> Neuer Kunde</button>
                                     <button onClick={() => exportKundenExcel(filteredKunden)} className="border border-zinc-200 px-4 py-2 text-[9px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50"><Download className="w-3 h-3"/> Excel</button>
                                     <button onClick={copyNewsletterBCC} className="bg-black text-white px-4 py-2 text-[9px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800"><Mail className="w-3 h-3"/> Newsletter (BCC)</button>
                                 </div>
                             </div>
-                            <div className="mb-8 relative max-w-sm">
+                            <div className="mb-8 relative w-full md:max-w-sm">
                                 <Search className="absolute left-3 top-3 text-zinc-400 w-4 h-4" />
                                 <input type="text" placeholder="Suchen nach Name, Email..." value={kundenSearch} onChange={(e) => setKundenSearch(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-zinc-50 border border-zinc-200 text-sm outline-none focus:border-black" />
                             </div>
@@ -547,9 +535,9 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 {filteredKunden.map((k, i) => (
                                     <div key={i} onClick={() => { setSelectedKunde(k); setNotizInput(k.notizText || ''); setIsEditingKunde(false); }} className="p-6 border border-zinc-100 bg-zinc-50 cursor-pointer hover:border-black group flex flex-col justify-between transition">
                                         <div>
-                                            <div className="flex justify-between items-start">
-                                                <p className="font-bold text-sm uppercase tracking-widest mb-1">{k.vorname || k.name ? `${k.vorname} ${k.name}` : <span className="italic text-zinc-400">Ohne Name</span>}</p>
-                                                {k.stammkunde_von && <span className="text-[8px] bg-zinc-200 px-1.5 py-0.5 uppercase font-bold tracking-widest">{k.stammkunde_von}</span>}
+                                            <div className="flex justify-between items-start gap-2">
+                                                <p className="font-bold text-sm uppercase tracking-widest mb-1 break-words">{k.vorname || k.name ? `${k.vorname} ${k.name}` : <span className="italic text-zinc-400">Ohne Name</span>}</p>
+                                                {k.stammkunde_von && <span className="text-[8px] bg-zinc-200 px-1.5 py-0.5 uppercase font-bold tracking-widest whitespace-nowrap">{k.stammkunde_von}</span>}
                                             </div>
                                             <p className="text-[10px] text-zinc-500 lowercase truncate mb-3">{k.email}</p>
                                             
@@ -576,17 +564,17 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 const currentKunde = kundenStamm.find(k => k.email === selectedKunde.email) || selectedKunde;
                                 return (
                                     <>
-                                        <button onClick={() => { setSelectedKunde(null); setIsEditingKunde(false); }} className="text-[10px] uppercase tracking-widest text-zinc-400 hover:text-black mb-8 border-b border-transparent hover:border-black pb-1 transition">← Zurück zur Liste</button>
+                                        <button onClick={() => { setSelectedKunde(null); setIsEditingKunde(false); }} className="text-[10px] uppercase tracking-widest text-zinc-400 hover:text-black mb-8 border-b border-transparent hover:border-black pb-1 transition inline-block">← Zurück zur Liste</button>
                                         <div className="grid lg:grid-cols-12 gap-12 lg:gap-16">
                                             
                                             <div className="lg:col-span-4 space-y-8">
-                                                <div className="flex justify-between items-start border-b border-zinc-100 pb-6">
+                                                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-zinc-100 pb-6">
                                                     <div>
                                                         <h2 className="serif text-4xl italic mb-2 break-words">{currentKunde.vorname} {currentKunde.name}</h2>
                                                         {!isEditingKunde && currentKunde.stammkunde_von && <span className="inline-block mt-2 text-[9px] uppercase tracking-widest bg-zinc-100 font-bold px-2 py-1">Stammkunde von {currentKunde.stammkunde_von}</span>}
                                                         {currentKunde.isNew && <span className="inline-block mt-2 text-[9px] uppercase tracking-widest bg-blue-100 text-blue-700 font-bold px-2 py-1">Neue Erfassung</span>}
                                                     </div>
-                                                    <button onClick={() => setIsEditingKunde(!isEditingKunde)} className={`p-2 rounded-full transition ${isEditingKunde ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>
+                                                    <button onClick={() => setIsEditingKunde(!isEditingKunde)} className={`p-2 rounded-full self-start transition ${isEditingKunde ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>
                                                         {isEditingKunde ? <X size={16}/> : <Edit size={16}/>}
                                                     </button>
                                                 </div>
@@ -605,7 +593,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                         logAction(`Kunde bearbeitet/erstellt: ${dataToSave.vorname} ${dataToSave.name}`);
                                                         setSelectedKunde({ ...currentKunde, ...dataToSave, email: emailToSave, isNew: false });
                                                         setIsEditingKunde(false);
-                                                    }} className="space-y-5 bg-zinc-50 p-6 border border-zinc-200 fade-in shadow-inner">
+                                                    }} className="space-y-5 bg-zinc-50 p-5 md:p-6 border border-zinc-200 fade-in shadow-inner">
                                                         
                                                         {currentKunde.isNew && (
                                                             <div className="pb-4 border-b border-zinc-200">
@@ -614,7 +602,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                             </div>
                                                         )}
                                                         
-                                                        <div className="grid grid-cols-2 gap-4">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                             <div><label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Vorname</label><input name="vorname" defaultValue={currentKunde.vorname} className="w-full border border-zinc-200 p-2.5 text-sm outline-none focus:border-black bg-white mt-1" /></div>
                                                             <div><label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Name</label><input name="name" defaultValue={currentKunde.name} className="w-full border border-zinc-200 p-2.5 text-sm outline-none focus:border-black bg-white mt-1" /></div>
                                                         </div>
@@ -623,9 +611,9 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                             <label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Strasse & Hausnr.</label>
                                                             <input name="adresse" defaultValue={currentKunde.adresse} className="w-full border border-zinc-200 p-2.5 text-sm outline-none focus:border-black bg-white mt-1" />
                                                         </div>
-                                                        <div className="grid grid-cols-3 gap-4">
-                                                            <div className="col-span-1"><label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">PLZ</label><input name="plz" defaultValue={currentKunde.plz} className="w-full border border-zinc-200 p-2.5 text-sm outline-none focus:border-black bg-white mt-1" /></div>
-                                                            <div className="col-span-2"><label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Ort</label><input name="ort" defaultValue={currentKunde.ort} className="w-full border border-zinc-200 p-2.5 text-sm outline-none focus:border-black bg-white mt-1" /></div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                            <div className="sm:col-span-1"><label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">PLZ</label><input name="plz" defaultValue={currentKunde.plz} className="w-full border border-zinc-200 p-2.5 text-sm outline-none focus:border-black bg-white mt-1" /></div>
+                                                            <div className="sm:col-span-2"><label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Ort</label><input name="ort" defaultValue={currentKunde.ort} className="w-full border border-zinc-200 p-2.5 text-sm outline-none focus:border-black bg-white mt-1" /></div>
                                                         </div>
                                                         <div className="pt-2 border-t border-zinc-200">
                                                             <label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Stammkunde bei (Zuweisung)</label>
@@ -634,9 +622,9 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                                 {teamMembers.map(m => <option key={m} value={m}>{m}</option>)}
                                                             </select>
                                                         </div>
-                                                        <div className="flex justify-end gap-3 pt-4">
-                                                            <button type="button" onClick={() => currentKunde.isNew ? setSelectedKunde(null) : setIsEditingKunde(false)} className="px-5 py-3 text-[9px] uppercase tracking-widest border border-zinc-200 hover:bg-zinc-100 transition bg-white">Abbrechen</button>
-                                                            <button type="submit" className="bg-black text-white px-5 py-3 text-[9px] uppercase tracking-widest hover:bg-zinc-800 transition">Speichern</button>
+                                                        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
+                                                            <button type="button" onClick={() => currentKunde.isNew ? setSelectedKunde(null) : setIsEditingKunde(false)} className="w-full sm:w-auto px-5 py-3 text-[9px] uppercase tracking-widest border border-zinc-200 hover:bg-zinc-100 transition bg-white text-center">Abbrechen</button>
+                                                            <button type="submit" className="w-full sm:w-auto bg-black text-white px-5 py-3 text-[9px] uppercase tracking-widest hover:bg-zinc-800 transition text-center">Speichern</button>
                                                         </div>
                                                     </form>
                                                 ) : (
@@ -679,19 +667,18 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                 </div>
                                             </div>
 
-                                            {/* RECHTER BEREICH: HISTORIE */}
                                             <div className="lg:col-span-8 space-y-12">
                                                 <div>
                                                     <h3 className="text-[11px] font-bold uppercase tracking-widest border-b border-zinc-200 pb-3 mb-6">Gebuchte Touren ({currentKunde.touren.length})</h3>
                                                     <div className="grid gap-4">
                                                         {currentKunde.touren.map(anm => (
-                                                            <div key={anm.id} className="p-5 bg-zinc-50 border border-zinc-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-black transition">
+                                                            <div key={anm.id} className="p-5 bg-zinc-50 border border-zinc-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-black transition">
                                                                 <div>
                                                                     <span className="text-[9px] text-zinc-400 tracking-widest">{anm.timestamp ? new Date(anm.timestamp.seconds * 1000).toLocaleDateString('de-CH') : ''}</span>
                                                                     <p className="font-bold text-base mt-1">{anm.tourTitle}</p>
                                                                     {anm.besonderes && <p className="text-sm text-zinc-600 mt-2 italic bg-white p-3 border border-zinc-100">"{anm.besonderes}"</p>}
                                                                 </div>
-                                                                <span className="text-[10px] uppercase tracking-widest bg-zinc-200 px-3 py-1.5 font-bold">{anm.status || 'Erfolgreich'}</span>
+                                                                <span className="text-[10px] uppercase tracking-widest bg-zinc-200 px-3 py-1.5 font-bold self-start sm:self-auto">{anm.status || 'Erfolgreich'}</span>
                                                             </div>
                                                         ))}
                                                         {currentKunde.touren.length === 0 && <p className="text-sm text-zinc-400 italic">Dieser Kunde hat noch keine Touren gebucht.</p>}
@@ -702,7 +689,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                     <div className="grid gap-4">
                                                         {currentKunde.anfragen.map(anf => (
                                                             <div key={anf.id} className="p-5 bg-zinc-50 border border-zinc-100 hover:border-black transition">
-                                                                <div className="flex justify-between mb-4 border-b border-zinc-100 pb-3">
+                                                                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4 border-b border-zinc-100 pb-3">
                                                                     <p className="font-bold text-sm">Betrifft: {anf.thema || 'Allgemein'}</p>
                                                                     <span className="text-[9px] text-zinc-400">{anf.timestamp ? new Date(anf.timestamp.seconds * 1000).toLocaleDateString('de-CH') : ''}</span>
                                                                 </div>
@@ -724,30 +711,30 @@ export default function AdminArea({ user, touren, onLogout }) {
 
             {adminSubView === 'anfragen' && (
                 <div className="fade-in max-w-5xl mx-auto w-full">
-                    <div className="flex justify-between items-center mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                         <h3 className="serif text-3xl italic">Anfragen über die Website</h3>
                     </div>
                     <div className="space-y-6">
                         {anfragen.map(a => (
-                            <div key={a.id} className="p-8 border border-zinc-200 bg-zinc-50 relative group hover:border-black transition">
-                                <div className="flex justify-between items-start mb-4">
-                                    <span className="text-[10px] uppercase tracking-widest font-bold bg-black text-white px-4 py-1.5">{a.thema || 'Allgemein'}</span>
+                            <div key={a.id} className="p-5 md:p-8 border border-zinc-200 bg-zinc-50 relative group hover:border-black transition">
+                                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+                                    <span className="text-[10px] uppercase tracking-widest font-bold bg-black text-white px-4 py-1.5 self-start">{a.thema || 'Allgemein'}</span>
                                     <div className="flex items-center gap-4">
                                         <span className="text-xs text-zinc-400">{a.timestamp ? new Date(a.timestamp.seconds * 1000).toLocaleDateString('de-CH') : ''}</span>
-                                        <button onClick={() => { if(confirm('Anfrage endgültig löschen?')) { deleteDoc(doc(db,'anfragen',a.id)); logAction(`Anfrage gelöscht (${a.vorname} ${a.name})`); } }} className="text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><Trash2 size={18}/></button>
+                                        <button onClick={() => { if(confirm('Anfrage endgültig löschen?')) { deleteDoc(doc(db,'anfragen',a.id)); logAction(`Anfrage gelöscht (${a.vorname} ${a.name})`); } }} className="text-red-300 hover:text-red-500 opacity-100 md:opacity-0 group-hover:opacity-100 transition"><Trash2 size={18}/></button>
                                     </div>
                                 </div>
-                                <p className="font-bold text-xl mt-4">{a.vorname} {a.name}</p>
-                                <a href={`mailto:${a.email}`} className="text-sm text-blue-600 hover:underline mb-6 inline-block">{a.email}</a>
-                                <div className="mt-2 p-6 bg-white border border-zinc-100 text-base text-zinc-700 italic leading-relaxed whitespace-pre-line shadow-sm">
+                                <p className="font-bold text-xl mt-4 break-words">{a.vorname} {a.name}</p>
+                                <a href={`mailto:${a.email}`} className="text-sm text-blue-600 hover:underline mb-6 inline-block break-all">{a.email}</a>
+                                <div className="mt-2 p-4 md:p-6 bg-white border border-zinc-100 text-base text-zinc-700 italic leading-relaxed whitespace-pre-line shadow-sm">
                                     "{a.nachricht}"
                                 </div>
-                                <div className="flex items-center gap-4 mt-6 pt-6 border-t border-zinc-200">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-6 pt-6 border-t border-zinc-200">
                                     <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Wer bearbeitet diese Anfrage?</label>
                                     <select 
                                         value={a.assignee || ''} 
                                         onChange={async (e) => await updateDoc(doc(db, 'anfragen', a.id), { assignee: e.target.value })}
-                                        className="border border-zinc-300 p-2 text-xs outline-none bg-white uppercase tracking-widest font-bold cursor-pointer hover:border-black transition"
+                                        className="border border-zinc-300 p-2 text-xs outline-none bg-white uppercase tracking-widest font-bold cursor-pointer hover:border-black transition w-full sm:w-auto"
                                     >
                                         <option value="">-- Frei / Niemand zugewiesen --</option>
                                         {teamMembers.map(m => <option key={m} value={m}>{m}</option>)}
@@ -762,12 +749,12 @@ export default function AdminArea({ user, touren, onLogout }) {
 
             {adminSubView === 'touren' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
-                    <div className="flex justify-between items-center mb-10">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
                         <h3 className="serif text-3xl italic">Touren Verwalten</h3>
-                        <button onClick={() => setEditingTour({ title: '', visible: true, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', material: '' })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md">+ Neue Tour erstellen</button>
+                        <button onClick={() => setEditingTour({ title: '', visible: true, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', material: '' })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
                     </div>
                     {editingTour ? (
-                        <form onSubmit={saveTour} className="space-y-8 bg-zinc-50 p-8 border border-zinc-200 shadow-sm">
+                        <form onSubmit={saveTour} className="space-y-8 bg-zinc-50 p-5 md:p-8 border border-zinc-200 shadow-sm">
                             <div className="flex justify-between items-center border-b border-zinc-200 pb-4 mb-6">
                                 <h3 className="serif text-2xl italic">{editingTour.id ? 'Tour bearbeiten' : 'Neue Tour anlegen'}</h3>
                             </div>
@@ -793,7 +780,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 </div>
                             </div>
                             
-                            {/* TITELBILD VORSCHAU & MULTI-UPLOAD */}
                             <div className="pt-6 border-t border-zinc-200 md:col-span-2">
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Bilder der Tour (Erstes Bild = Titelbild)</label>
                                 
@@ -808,7 +794,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                     newImages.splice(idx, 1);
                                                     setEditingTour({...editingTour, images: newImages});
                                                 }}
-                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-10"
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-10"
                                                 title="Bild entfernen"
                                             >
                                                 <X size={14} strokeWidth={3} />
@@ -840,20 +826,20 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Spezifisches Material (ergänzend zum PDF)</label>
                                 <textarea name="material" defaultValue={editingTour.material} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" />
                             </div>
-                            <div className="flex justify-end gap-4 pt-8 border-t border-zinc-200">
-                                <button type="button" onClick={() => setEditingTour(null)} className="border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition">Abbrechen</button>
-                                <button type="submit" disabled={isUploading} className="bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition">{isUploading ? 'Lädt...' : 'Tour Speichern'}</button>
+                            <div className="flex flex-col-reverse sm:flex-row justify-end gap-4 pt-8 border-t border-zinc-200">
+                                <button type="button" onClick={() => setEditingTour(null)} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
+                                <button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition text-center">{isUploading ? 'Lädt...' : 'Tour Speichern'}</button>
                             </div>
                         </form>
                     ) : (
                         <div className="space-y-4">
                             {touren && touren.map(t => (
-                            <div key={t.id} className="flex justify-between items-center p-6 border border-zinc-200 bg-white hover:border-black transition group">
+                            <div key={t.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
                                 <div>
                                     <p className="text-sm font-bold uppercase tracking-widest mb-1">{t.title} {t.visible===false && <span className="text-red-500 ml-3 bg-red-50 px-2 py-1">[VERSTECKT]</span>}</p>
                                     <p className="text-xs text-zinc-500">{t.date}</p>
                                 </div>
-                                <div className="flex gap-6 items-center opacity-70 group-hover:opacity-100 transition">
+                                <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
                                     <button onClick={() => setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
                                     <button onClick={() => deleteTour(t.id, t.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                 </div>
@@ -865,16 +851,16 @@ export default function AdminArea({ user, touren, onLogout }) {
 
             {adminSubView === 'anmeldungen' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
-                    <div className="flex justify-between items-center mb-10">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
                         <h3 className="serif text-3xl italic">Anmeldungen pro Tour</h3>
-                        <button onClick={() => exportToExcel(anmeldungen)} className="px-6 py-3 bg-black text-white text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Download size={14}/> Excel Export</button>
+                        <button onClick={() => exportToExcel(anmeldungen)} className="w-full md:w-auto justify-center px-6 py-3 bg-black text-white text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Download size={14}/> Excel Export</button>
                     </div>
                     <div className="space-y-16">
                         {Object.entries(anmeldungen.reduce((acc, anm) => { const k = anm.tourTitle; if(!acc[k]) acc[k]=[]; acc[k].push(anm); return acc; }, {})).map(([title, teilnehmer]) => (
-                            <div key={title} className="bg-white border border-zinc-200 p-8 shadow-sm">
+                            <div key={title} className="bg-white border border-zinc-200 p-5 md:p-8 shadow-sm w-full">
                                 <h4 className="text-lg font-bold uppercase tracking-widest mb-6 border-b border-zinc-200 pb-4">{title} <span className="text-zinc-400 font-normal ml-2">({teilnehmer.length} gebucht)</span></h4>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
+                                <div className="overflow-x-auto w-full">
+                                    <table className="w-full text-left text-xs min-w-[600px]">
                                         <thead className="bg-zinc-50 border-y border-zinc-200 text-zinc-500 uppercase tracking-widest font-bold">
                                             <tr><th className="p-4">Name & Adresse</th><th className="p-4">Kontakt</th><th className="p-4">Infos & Ernährung</th><th className="p-4 text-right">Aktion</th></tr>
                                         </thead>
@@ -886,7 +872,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                         <span className="text-zinc-500">{a.adresse}<br/>{a.plz_ort}</span>
                                                     </td>
                                                     <td className="p-4">
-                                                        <a href={`mailto:${a.email}`} className="text-blue-600 hover:underline block mb-1">{a.email}</a>
+                                                        <a href={`mailto:${a.email}`} className="text-blue-600 hover:underline block mb-1 break-all">{a.email}</a>
                                                         <span className="text-zinc-600">{a.phone}</span>
                                                     </td>
                                                     <td className="p-4">
@@ -911,19 +897,19 @@ export default function AdminArea({ user, touren, onLogout }) {
             {/* AUFGABEN (KANBAN) */}
             {adminSubView === 'aufgaben' && (
                 <div className="fade-in flex flex-col h-full w-full">
-                    <div className="flex justify-between items-center mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                         <h3 className="serif text-3xl italic">Team-Aufgaben</h3>
-                        <div className="flex gap-4">
-                            <button onClick={() => setShowTaskKategorienModal(true)} className="border border-zinc-300 px-6 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-50 transition flex items-center gap-2"><Settings size={14}/> Kategorien</button>
-                            <button onClick={() => setEditingTask({ title: '', status: 'Offen', category: taskKategorien[0] || 'Allgemein', assignee: '' })} className="bg-black text-white px-6 py-3 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Plus size={14}/> Neue Aufgabe</button>
+                        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                            <button onClick={() => setShowTaskKategorienModal(true)} className="flex-1 md:flex-none justify-center border border-zinc-300 px-6 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-50 transition flex items-center gap-2"><Settings size={14}/> Kategorien</button>
+                            <button onClick={() => setEditingTask({ title: '', status: 'Offen', category: taskKategorien[0] || 'Allgemein', assignee: '' })} className="flex-1 md:flex-none justify-center bg-black text-white px-6 py-3 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Plus size={14}/> Neue Aufgabe</button>
                         </div>
                     </div>
-                    <div className="flex gap-3 mb-8 overflow-x-auto pb-2 w-full scrollbar-hide border-b border-zinc-100">
-                        {['Alle', ...taskKategorien].map(c => <button key={c} onClick={() => setTaskFilter(c)} className={`px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest transition whitespace-nowrap border-b-2 ${taskFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
+                    <div className="flex flex-wrap gap-2 mb-8 border-b border-zinc-100 pb-4 w-full">
+                        {['Alle', ...taskKategorien].map(c => <button key={c} onClick={() => setTaskFilter(c)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${taskFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
                     </div>
-                    <div className="flex gap-8 overflow-x-auto pb-6 items-start w-full snap-x">
+                    <div className="flex gap-4 md:gap-8 overflow-x-auto pb-6 items-start w-full snap-x snap-mandatory">
                         {KANBAN_COLUMNS.map(col => (
-                            <div key={col} className="w-80 flex-shrink-0 bg-zinc-50 border border-zinc-200 p-5 rounded-sm snap-start">
+                            <div key={col} className="w-[85vw] md:w-80 flex-shrink-0 bg-zinc-50 border border-zinc-200 p-5 rounded-sm snap-center md:snap-start">
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 flex justify-between border-b border-zinc-200 pb-3">
                                     {col} <span className="bg-zinc-200 px-2 rounded-full text-black">{tasks.filter(t => t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).length}</span>
                                 </h4>
@@ -951,34 +937,37 @@ export default function AdminArea({ user, touren, onLogout }) {
 
             {adminSubView === 'dokumente' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
-                    <div className="flex justify-between items-center mb-8"><h3 className="serif text-3xl italic">Zentrale Dokumente</h3>
-                        <div className="flex gap-4"><button onClick={() => setShowDocKategorienModal(true)} className="border border-zinc-300 p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50 transition"><Settings size={14}/> Ordner</button><button onClick={() => { setEditingDoc({ name: '', category: docKategorien[0] || '', subcategory: '' }); setUploadFiles([]); }} className="bg-black text-white p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Plus size={14}/> Upload</button></div>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8"><h3 className="serif text-3xl italic">Zentrale Dokumente</h3>
+                        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                            <button onClick={() => setShowDocKategorienModal(true)} className="flex-1 md:flex-none justify-center border border-zinc-300 p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50 transition"><Settings size={14}/> Ordner</button>
+                            <button onClick={() => { setEditingDoc({ name: '', category: docKategorien[0] || '', subcategory: '' }); setUploadFiles([]); }} className="flex-1 md:flex-none justify-center bg-black text-white p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Plus size={14}/> Upload</button>
+                        </div>
                     </div>
                     <div className="flex flex-col gap-3 mb-8">
-                        <div className="flex gap-3 overflow-x-auto pb-2 border-b border-zinc-100 items-center">
-                            <span className="text-[10px] uppercase tracking-widest text-zinc-400 mr-2">Hauptordner:</span>
-                            {['Alle', ...docKategorien].map(c => <button key={c} onClick={() => { setDocFilter(c); setDocSubFilter('Alle'); }} className={`px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest transition whitespace-nowrap border-b-2 ${docFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
+                        <div className="flex flex-wrap gap-2 pb-2 border-b border-zinc-100 items-center w-full">
+                            <span className="text-[10px] uppercase tracking-widest text-zinc-400 mr-2 block w-full md:w-auto mb-2 md:mb-0">Hauptordner:</span>
+                            {['Alle', ...docKategorien].map(c => <button key={c} onClick={() => { setDocFilter(c); setDocSubFilter('Alle'); }} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${docFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
                         </div>
                         {docFilter !== 'Alle' && (docSubkategorien[docFilter] && docSubkategorien[docFilter].length > 0) && (
-                            <div className="flex gap-3 overflow-x-auto pb-2 border-b border-zinc-100 items-center fade-in">
-                                <span className="text-[10px] uppercase tracking-widest text-zinc-400 mr-2">Unterordner:</span>
-                                {['Alle', ...docSubkategorien[docFilter]].map(c => <button key={c} onClick={() => setDocSubFilter(c)} className={`px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest transition whitespace-nowrap border-b-2 ${docSubFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
+                            <div className="flex flex-wrap gap-2 pb-2 border-b border-zinc-100 items-center w-full fade-in">
+                                <span className="text-[10px] uppercase tracking-widest text-zinc-400 mr-2 block w-full md:w-auto mb-2 md:mb-0">Unterordner:</span>
+                                {['Alle', ...docSubkategorien[docFilter]].map(c => <button key={c} onClick={() => setDocSubFilter(c)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${docSubFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
                             </div>
                         )}
                     </div>
-                    <div className="bg-white border border-zinc-200">
+                    <div className="bg-white border border-zinc-200 overflow-x-auto w-full">
                         <table className="w-full text-left text-sm border-collapse min-w-[600px]">
                             <thead><tr className="border-b border-zinc-200 bg-zinc-50 text-[10px] uppercase tracking-widest text-zinc-500 font-bold"><th className="p-5">Dateiname</th><th className="p-5">Ordner / Kategorie</th><th className="p-5 text-right">Aktionen</th></tr></thead>
                             <tbody className="divide-y divide-zinc-100">
                                 {docs.filter(d => (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).map(d => (
                                 <tr key={d.id} className="hover:bg-zinc-50 transition group">
-                                    <td className="p-5 flex gap-4 items-center"><div className="p-3 bg-zinc-100 text-zinc-400 rounded-sm"><FileText size={20}/></div><div><span className="font-bold text-base block mb-1">{d.name}</span> <span className="text-[10px] text-zinc-400 tracking-widest">{d.size}</span></div></td>
+                                    <td className="p-5 flex gap-4 items-center"><div className="p-3 bg-zinc-100 text-zinc-400 rounded-sm"><FileText size={20}/></div><div className="min-w-0"><span className="font-bold text-base block mb-1 truncate">{d.name}</span> <span className="text-[10px] text-zinc-400 tracking-widest">{d.size}</span></div></td>
                                     <td className="p-5 text-xs font-bold uppercase tracking-widest text-zinc-500">
                                         {d.category}
                                         {d.subcategory && <span className="block text-[9px] text-zinc-400 mt-1 font-normal">{d.subcategory}</span>}
                                     </td>
                                     <td className="p-5 text-right">
-                                        <div className="flex justify-end gap-4 opacity-50 group-hover:opacity-100 transition">
+                                        <div className="flex justify-end gap-4 opacity-100 md:opacity-50 group-hover:opacity-100 transition">
                                             <button onClick={() => setEditingDoc(d)} className="hover:text-black flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold"><Edit size={14}/> Edit</button>
                                             {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="hover:text-black flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold"><ExternalLink size={14}/> Öffnen</a>}
                                         </div>
@@ -994,26 +983,26 @@ export default function AdminArea({ user, touren, onLogout }) {
 
             {adminSubView === 'protokolle' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
-                    <div className="flex justify-between items-center mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                         <h3 className="serif text-3xl italic">Protokolle & Ideen</h3>
-                        <div className="flex gap-4">
-                            <button onClick={() => setShowProtocolKategorienModal(true)} className="border border-zinc-300 p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50 transition"><Settings size={14}/> Kategorien</button>
-                            <button onClick={() => setEditingProtocol({ title: '', date: new Date().toISOString().split('T')[0], category: protocolKategorien[0] || 'Allgemein', decisions: [] })} className="bg-black text-white px-6 py-3 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition shadow-md"><Plus size={14}/> Neu</button>
+                        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                            <button onClick={() => setShowProtocolKategorienModal(true)} className="flex-1 md:flex-none justify-center border border-zinc-300 p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50 transition"><Settings size={14}/> Kategorien</button>
+                            <button onClick={() => setEditingProtocol({ title: '', date: new Date().toISOString().split('T')[0], category: protocolKategorien[0] || 'Allgemein', decisions: [] })} className="flex-1 md:flex-none justify-center bg-black text-white px-6 py-3 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition shadow-md"><Plus size={14}/> Neu</button>
                         </div>
                     </div>
-                    <div className="flex gap-3 mb-8 overflow-x-auto pb-2 border-b border-zinc-100">
-                        {['Alle', ...protocolKategorien].map(c => <button key={c} onClick={() => setProtocolFilter(c)} className={`px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest transition whitespace-nowrap border-b-2 ${protocolFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
+                    <div className="flex flex-wrap gap-2 mb-8 border-b border-zinc-100 pb-4 w-full">
+                        {['Alle', ...protocolKategorien].map(c => <button key={c} onClick={() => setProtocolFilter(c)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${protocolFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {protocols.filter(p => protocolFilter === 'Alle' || p.category === protocolFilter).map(p => (
-                            <div key={p.id} className="border border-zinc-200 p-8 hover:border-black transition bg-white flex flex-col justify-between group">
+                            <div key={p.id} className="border border-zinc-200 p-6 md:p-8 hover:border-black transition bg-white flex flex-col justify-between group">
                                 <div>
                                     <div className="flex justify-between items-start mb-6">
                                         <div><span className="text-[9px] uppercase tracking-widest font-bold bg-zinc-100 px-2 py-1 text-zinc-500">{p.category}</span><h4 className="font-bold text-xl mt-3">{p.title}</h4><span className="text-[10px] text-zinc-400 uppercase tracking-widest mt-1 block">{new Date(p.date).toLocaleDateString('de-CH')}</span></div>
                                     </div>
                                     <p className="text-sm text-zinc-600 line-clamp-4 leading-relaxed mb-6">"{p.notes}"</p>
                                 </div>
-                                <div className="flex justify-between items-center pt-6 border-t border-zinc-100 opacity-60 group-hover:opacity-100 transition">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-6 border-t border-zinc-100 opacity-100 md:opacity-60 group-hover:opacity-100 transition">
                                     <button onClick={() => generateAndSharePDF(p)} className="flex items-center gap-2 text-[9px] uppercase tracking-widest font-bold hover:text-black"><Download size={14}/> PDF Export</button>
                                     <button onClick={() => setEditingProtocol(p)} className="flex items-center gap-2 text-[9px] uppercase tracking-widest font-bold hover:text-black"><Edit size={14}/> Bearbeiten</button>
                                 </div>
@@ -1032,8 +1021,8 @@ export default function AdminArea({ user, touren, onLogout }) {
       
       {showDocKategorienModal && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-10 w-full max-w-sm shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">Dokument Ordner</h3><button onClick={() => setShowDocKategorienModal(false)} className="hover:text-red-500 transition"><X/></button></div>
+            <div className="bg-white p-5 md:p-10 w-full max-w-sm shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">Dokument Ordner</h3><button onClick={() => setShowDocKategorienModal(false)} className="hover:text-red-500 transition p-2"><X/></button></div>
                 
                 <h4 className="text-[10px] font-bold uppercase tracking-widest mb-4">Hauptordner Verwalten</h4>
                 <div className="space-y-3 mb-4 max-h-[30vh] overflow-y-auto">
@@ -1045,8 +1034,8 @@ export default function AdminArea({ user, touren, onLogout }) {
                     ))}
                 </div>
                 <form onSubmit={e => { e.preventDefault(); const v=e.target.k.value.trim(); if(v && !docKategorien.includes(v)) { setDoc(doc(db, 'settings', 'dokumente'), { kategorien: [...docKategorien, v] }, { merge: true }); e.target.k.value=''; } }} className="flex gap-2">
-                    <input name="k" placeholder="Neuer Ordnername..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition"/>
-                    <button className="bg-black text-white px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
+                    <input name="k" placeholder="Neuer Ordnername..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition w-full"/>
+                    <button className="bg-black text-white px-4 md:px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
                 </form>
 
                 <h4 className="text-[10px] font-bold uppercase tracking-widest mb-4 mt-10 border-t border-zinc-100 pt-6">Unterordner Verwalten</h4>
@@ -1080,8 +1069,8 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     e.target.sub_k.value=''; 
                                 } 
                             }} className="flex gap-2">
-                                <input name="sub_k" placeholder="Neuer Unterordner..." className="flex-1 border border-zinc-300 p-2 text-xs outline-none focus:border-black transition"/>
-                                <button className="bg-black text-white px-4 text-[9px] uppercase tracking-widest hover:bg-zinc-800 transition">Hinzufügen</button>
+                                <input name="sub_k" placeholder="Neuer Unterordner..." className="flex-1 border border-zinc-300 p-2 text-xs outline-none focus:border-black transition w-full"/>
+                                <button className="bg-black text-white px-3 md:px-4 text-[9px] uppercase tracking-widest hover:bg-zinc-800 transition">Hinzufügen</button>
                             </form>
                         </div>
                     ))}
@@ -1092,8 +1081,8 @@ export default function AdminArea({ user, touren, onLogout }) {
 
       {showTaskKategorienModal && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-10 w-full max-w-sm shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">Aufgaben Labels</h3><button onClick={() => setShowTaskKategorienModal(false)} className="hover:text-red-500 transition"><X/></button></div>
+            <div className="bg-white p-5 md:p-10 w-full max-w-sm shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">Aufgaben Labels</h3><button onClick={() => setShowTaskKategorienModal(false)} className="hover:text-red-500 transition p-2"><X/></button></div>
                 <div className="space-y-3 mb-8 max-h-[50vh] overflow-y-auto">
                     {taskKategorien.map((k, i) => (
                         <div key={i} className="flex justify-between items-center p-4 bg-zinc-50 border border-zinc-200 text-xs font-bold uppercase tracking-widest">
@@ -1103,8 +1092,8 @@ export default function AdminArea({ user, touren, onLogout }) {
                     ))}
                 </div>
                 <form onSubmit={e => { e.preventDefault(); const v=e.target.k.value.trim(); if(v && !taskKategorien.includes(v)) { setDoc(doc(db, 'settings', 'aufgaben'), { kategorien: [...taskKategorien, v] }, { merge: true }); e.target.k.value=''; } }} className="flex gap-2">
-                    <input name="k" placeholder="Neues Label..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition"/>
-                    <button className="bg-black text-white px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
+                    <input name="k" placeholder="Neues Label..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition w-full"/>
+                    <button className="bg-black text-white px-4 md:px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
                 </form>
             </div>
         </div>
@@ -1112,8 +1101,8 @@ export default function AdminArea({ user, touren, onLogout }) {
 
       {showProtocolKategorienModal && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-10 w-full max-w-sm shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">Protokoll Kategorien</h3><button onClick={() => setShowProtocolKategorienModal(false)} className="hover:text-red-500 transition"><X/></button></div>
+            <div className="bg-white p-5 md:p-10 w-full max-w-sm shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">Protokoll Kategorien</h3><button onClick={() => setShowProtocolKategorienModal(false)} className="hover:text-red-500 transition p-2"><X/></button></div>
                 <div className="space-y-3 mb-8 max-h-[50vh] overflow-y-auto">
                     {protocolKategorien.map((k, i) => (
                         <div key={i} className="flex justify-between items-center p-4 bg-zinc-50 border border-zinc-200 text-xs font-bold uppercase tracking-widest">
@@ -1123,8 +1112,8 @@ export default function AdminArea({ user, touren, onLogout }) {
                     ))}
                 </div>
                 <form onSubmit={e => { e.preventDefault(); const v=e.target.k.value.trim(); if(v && !protocolKategorien.includes(v)) { setDoc(doc(db, 'settings', 'protokolle'), { kategorien: [...protocolKategorien, v] }, { merge: true }); e.target.k.value=''; } }} className="flex gap-2">
-                    <input name="k" placeholder="Neue Kategorie..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition"/>
-                    <button className="bg-black text-white px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
+                    <input name="k" placeholder="Neue Kategorie..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition w-full"/>
+                    <button className="bg-black text-white px-4 md:px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
                 </form>
             </div>
         </div>
@@ -1133,23 +1122,23 @@ export default function AdminArea({ user, touren, onLogout }) {
       {/* --- BEARBEITUNGS MODALS --- */}
       {editingTask && (
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-10 w-full max-w-3xl max-h-[95vh] overflow-y-auto shadow-2xl">
+            <div className="bg-white p-5 md:p-10 w-full max-w-3xl max-h-[95vh] overflow-y-auto shadow-2xl">
                 <div className="flex justify-between items-center mb-8 border-b border-zinc-200 pb-6">
-                    <h3 className="serif text-3xl italic">{editingTask.id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}</h3>
+                    <h3 className="serif text-2xl md:text-3xl italic">{editingTask.id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}</h3>
                     <button onClick={() => setEditingTask(null)} className="text-zinc-400 hover:text-black transition-colors bg-zinc-100 p-2 rounded-full"><X size={20}/></button>
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); saveTask(editingTask, e.target.file.files[0]); }} className="space-y-8">
                     <div>
                         <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel der Aufgabe</label>
-                        <input required value={editingTask.title} onChange={e => setEditingTask({...editingTask, title: e.target.value})} placeholder="Kurzer, prägnanter Titel" className="w-full border-b-2 border-zinc-200 p-3 outline-none mt-2 text-xl focus:border-black transition" />
+                        <input required value={editingTask.title} onChange={e => setEditingTask({...editingTask, title: e.target.value})} placeholder="Kurzer, prägnanter Titel" className="w-full border-b-2 border-zinc-200 p-3 outline-none mt-2 text-lg md:text-xl focus:border-black transition" />
                     </div>
                     
                     <div>
                         <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Beschreibung & Details</label>
-                        <textarea value={editingTask.description || ''} onChange={e => setEditingTask({...editingTask, description: e.target.value})} placeholder="Was genau muss gemacht werden?" rows="6" className="w-full border border-zinc-300 p-5 text-base mt-3 resize-y bg-zinc-50 focus:bg-white transition-colors outline-none focus:border-black" />
+                        <textarea value={editingTask.description || ''} onChange={e => setEditingTask({...editingTask, description: e.target.value})} placeholder="Was genau muss gemacht werden?" rows="6" className="w-full border border-zinc-300 p-4 md:p-5 text-base mt-3 resize-y bg-zinc-50 focus:bg-white transition-colors outline-none focus:border-black" />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6 border-t border-zinc-100">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 pt-6 border-t border-zinc-100">
                         <div>
                             <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Status</label>
                             <select value={editingTask.status} onChange={e => setEditingTask({...editingTask, status: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer">{KANBAN_COLUMNS.map(c => <option key={c}>{c}</option>)}</select>
@@ -1169,17 +1158,17 @@ export default function AdminArea({ user, touren, onLogout }) {
                     
                     <div className="pt-6 border-t border-zinc-100">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Dateianhang</label>
-                        <div className="mt-3 border border-zinc-300 p-6 bg-zinc-50 flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="mt-3 border border-zinc-300 p-4 md:p-6 bg-zinc-50 flex flex-col md:flex-row items-center justify-between gap-4">
                             <input type="file" name="file" className="text-sm cursor-pointer w-full md:w-auto" />
-                            {editingTask.fileUrl && <a href={editingTask.fileUrl} target="_blank" rel="noreferrer" className="text-[10px] uppercase font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-2 bg-white px-4 py-2 border border-zinc-200"><ExternalLink size={14}/> Bisherige Datei öffnen</a>}
+                            {editingTask.fileUrl && <a href={editingTask.fileUrl} target="_blank" rel="noreferrer" className="w-full md:w-auto text-[10px] uppercase font-bold text-blue-600 hover:text-blue-800 hover:underline flex justify-center items-center gap-2 bg-white px-4 py-2 border border-zinc-200"><ExternalLink size={14}/> Bisherige Datei öffnen</a>}
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center pt-10 border-t border-zinc-200">
-                        {editingTask.id ? <button type="button" onClick={() => { if(confirm('Aufgabe sicher löschen?')) { deleteDoc(doc(db,'tasks',editingTask.id)); logAction(`Aufgabe gelöscht: ${editingTask.title}`); setEditingTask(null); } }} className="text-red-500 font-bold text-[10px] uppercase tracking-widest hover:text-red-700 hover:bg-red-50 px-4 py-2 transition flex items-center gap-2"><Trash2 size={16}/> Aufgabe löschen</button> : <div/>} 
-                        <div className="flex gap-4">
-                            <button type="button" onClick={() => setEditingTask(null)} className="border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition">Abbrechen</button>
-                            <button type="submit" disabled={isUploading} className="bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl">{isUploading ? 'Speichert...' : 'Aufgabe speichern'}</button>
+                    <div className="flex flex-col-reverse md:flex-row justify-between items-center pt-8 border-t border-zinc-200 gap-4">
+                        {editingTask.id ? <button type="button" onClick={() => { if(confirm('Aufgabe sicher löschen?')) { deleteDoc(doc(db,'tasks',editingTask.id)); logAction(`Aufgabe gelöscht: ${editingTask.title}`); setEditingTask(null); } }} className="w-full md:w-auto justify-center text-red-500 font-bold text-[10px] uppercase tracking-widest hover:text-red-700 hover:bg-red-50 px-4 py-3 transition flex items-center gap-2"><Trash2 size={16}/> Aufgabe löschen</button> : <div/>} 
+                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                            <button type="button" onClick={() => setEditingTask(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
+                            <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading ? 'Speichert...' : 'Aufgabe speichern'}</button>
                         </div>
                     </div>
                 </form>
@@ -1189,10 +1178,10 @@ export default function AdminArea({ user, touren, onLogout }) {
 
       {editingDoc && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-10 w-full max-w-2xl shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">{editingDoc.id ? 'Dokument bearbeiten' : 'Dokument(e) Upload'}</h3><button onClick={() => setEditingDoc(null)} className="hover:text-red-500 transition"><X/></button></div>
+            <div className="bg-white p-5 md:p-10 w-full max-w-2xl shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">{editingDoc.id ? 'Dokument bearbeiten' : 'Dokument(e) Upload'}</h3><button onClick={() => setEditingDoc(null)} className="hover:text-red-500 transition p-2"><X/></button></div>
                 <form onSubmit={saveDoc} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                         <div>
                             <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Ordner (Hauptkategorie)</label>
                             <select name="category" value={editingDoc.category} onChange={e => setEditingDoc({...editingDoc, category: e.target.value, subcategory: ''})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-2 bg-white cursor-pointer outline-none focus:border-black transition">
@@ -1208,7 +1197,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                         </div>
                     </div>
                     
-                    {/* Unterscheidung zwischen Upload vs. Editieren */}
                     {!editingDoc.id ? (
                         <>
                             <div className="pt-4 border-t border-zinc-100">
@@ -1224,16 +1212,15 @@ export default function AdminArea({ user, touren, onLogout }) {
                                         onDragOver={e => { e.preventDefault(); setDragActive(true); }}
                                         onDragLeave={() => setDragActive(false)}
                                         onDrop={e => { e.preventDefault(); setDragActive(false); setUploadFiles(Array.from(e.dataTransfer.files)); }}
-                                        className={`border-2 border-dashed p-10 text-center transition-colors ${dragActive ? 'border-black bg-zinc-100' : 'border-zinc-300 bg-zinc-50 hover:bg-zinc-100'}`}
+                                        className={`border-2 border-dashed p-6 md:p-10 text-center transition-colors ${dragActive ? 'border-black bg-zinc-100' : 'border-zinc-300 bg-zinc-50 hover:bg-zinc-100'}`}
                                     >
                                         <div className="flex flex-col items-center justify-center space-y-4 cursor-pointer relative">
                                             <UploadCloud size={32} className="text-zinc-400" />
                                             {uploadFiles.length > 0 ? (
-                                                <p className="text-sm font-bold text-black">{uploadFiles.length} Datei(en) ausgewählt:<br/><span className="text-xs font-normal text-zinc-500 mt-2 block">{uploadFiles.map(f=>f.name).join(', ')}</span></p>
+                                                <p className="text-sm font-bold text-black">{uploadFiles.length} Datei(en) ausgewählt:<br/><span className="text-xs font-normal text-zinc-500 mt-2 block break-all">{uploadFiles.map(f=>f.name).join(', ')}</span></p>
                                             ) : (
-                                                <p className="text-xs text-zinc-500 uppercase tracking-widest">Dateien hierhin ziehen oder klicken</p>
+                                                <p className="text-xs text-zinc-500 uppercase tracking-widest leading-relaxed">Dateien hierhin ziehen oder<br className="md:hidden"/> auf das Feld tippen</p>
                                             )}
-                                            {/* Unsichtbarer Input, der den ganzen Kasten überdeckt */}
                                             <input type="file" multiple onChange={e => setUploadFiles(Array.from(e.target.files))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                                         </div>
                                     </div>
@@ -1241,18 +1228,17 @@ export default function AdminArea({ user, touren, onLogout }) {
                             </div>
                         </>
                     ) : (
-                        // Edit Modus für bestehendes Dokument
                         <div className="pt-4 border-t border-zinc-100 space-y-4">
                             <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Dateiname / Titel</label><input name="name" required value={editingDoc.name} onChange={e => setEditingDoc({...editingDoc, name: e.target.value})} className="w-full border-b border-zinc-300 p-3 outline-none mt-1 focus:border-black transition text-lg" /></div>
                             {editingDoc.isLink && <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Web-Link URL</label><input name="url" type="url" required value={editingDoc.url} onChange={e => setEditingDoc({...editingDoc, url: e.target.value})} className="w-full border border-zinc-300 p-4 mt-2 text-sm outline-none focus:border-black transition" /></div>}
                         </div>
                     )}
 
-                    <div className="flex justify-between items-center pt-8 border-t border-zinc-200">
-                        {editingDoc.id ? <button type="button" onClick={() => { if(confirm('Wirklich löschen?')) { deleteDoc(doc(db,'docs',editingDoc.id)); logAction(`Dokument gelöscht: ${editingDoc.name}`); setEditingDoc(null); } }} className="text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline">Löschen</button> : <div/>} 
-                        <div className="flex gap-4">
-                            <button type="button" onClick={() => { setEditingDoc(null); setUploadFiles([]); }} className="border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition">Abbrechen</button>
-                            <button type="submit" disabled={isUploading || (!editingDoc.id && !editingDoc.isLink && uploadFiles.length === 0)} className="bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl disabled:bg-zinc-300">{isUploading?'Lädt...':'Speichern'}</button>
+                    <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 gap-4">
+                        {editingDoc.id ? <button type="button" onClick={() => { if(confirm('Wirklich löschen?')) { deleteDoc(doc(db,'docs',editingDoc.id)); logAction(`Dokument gelöscht: ${editingDoc.name}`); setEditingDoc(null); } }} className="text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline text-center w-full md:w-auto py-2">Löschen</button> : <div/>} 
+                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                            <button type="button" onClick={() => { setEditingDoc(null); setUploadFiles([]); }} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
+                            <button type="submit" disabled={isUploading || (!editingDoc.id && !editingDoc.isLink && uploadFiles.length === 0)} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl disabled:bg-zinc-300 text-center">{isUploading?'Lädt...':'Speichern'}</button>
                         </div>
                     </div>
                 </form>
@@ -1262,37 +1248,42 @@ export default function AdminArea({ user, touren, onLogout }) {
       
       {editingProtocol && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-3xl italic">{editingProtocol.id?'Eintrag bearbeiten':'Neuer Eintrag'}</h3><button onClick={() => setEditingProtocol(null)} className="hover:text-red-500 transition"><X/></button></div>
+            <div className="bg-white p-5 md:p-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl md:text-3xl italic">{editingProtocol.id?'Eintrag bearbeiten':'Neuer Eintrag'}</h3><button onClick={() => setEditingProtocol(null)} className="hover:text-red-500 transition p-2"><X/></button></div>
                 <form onSubmit={(e) => { e.preventDefault(); saveProtocol(editingProtocol, e.target.file?.files[0]); }} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                         <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel / Thema</label><input required value={editingProtocol.title} onChange={e => setEditingProtocol({...editingProtocol, title: e.target.value})} className="w-full border-b border-zinc-300 p-3 mt-1 outline-none text-xl focus:border-black transition" /></div>
                         <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Datum</label><input type="date" value={editingProtocol.date} onChange={e => setEditingProtocol({...editingProtocol, date: e.target.value})} className="w-full border-b border-zinc-300 p-3 mt-1 outline-none text-lg focus:border-black transition" /></div>
                         <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kategorie</label><select value={editingProtocol.category} onChange={e => setEditingProtocol({...editingProtocol, category: e.target.value})} className="w-full border border-zinc-300 p-4 mt-2 outline-none text-xs uppercase tracking-widest bg-white cursor-pointer focus:border-black transition">{protocolKategorien.map(c => <option key={c}>{c}</option>)}</select></div>
                         <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Teilnehmer</label><input value={editingProtocol.participants || ''} onChange={e => setEditingProtocol({...editingProtocol, participants: e.target.value})} placeholder="Adrian, Jens..." className="w-full border border-zinc-300 p-4 mt-2 outline-none text-sm focus:border-black transition" /></div>
                     </div>
                     
-                    <div className="pt-4"><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Diskutierte Notizen / Details</label><textarea value={editingProtocol.notes || ''} onChange={e => setEditingProtocol({...editingProtocol, notes: e.target.value})} rows="6" className="w-full border border-zinc-300 p-5 mt-2 outline-none text-sm bg-zinc-50 focus:bg-white resize-y focus:border-black transition" /></div>
+                    <div className="pt-4"><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Diskutierte Notizen / Details</label><textarea value={editingProtocol.notes || ''} onChange={e => setEditingProtocol({...editingProtocol, notes: e.target.value})} rows="6" className="w-full border border-zinc-300 p-4 md:p-5 mt-2 outline-none text-sm bg-zinc-50 focus:bg-white resize-y focus:border-black transition" /></div>
                     
                     <div className="pt-6 border-t border-zinc-200">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block mb-4">Beschlüsse & To-Dos aus dem Meeting</label>
                         <div className="space-y-3">
                             {editingProtocol.decisions.map((d, i) => (
-                                <div key={i} className="flex gap-4 items-center bg-zinc-50 p-4 border border-zinc-200">
-                                    <div className="flex-1"><label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Beschluss / To-Do</label><input value={d.text} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].text = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} placeholder="Was wird gemacht?" className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition" /></div>
-                                    <div className="w-48"><label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Wer machts?</label><select value={d.assignee || ''} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].assignee = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition bg-white"><option value="">Zuständig...</option>{teamMembers.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
-                                    <button type="button" onClick={() => { const nd = [...editingProtocol.decisions]; nd.splice(i,1); setEditingProtocol({...editingProtocol, decisions: nd}); }} className="text-zinc-400 hover:text-red-500 pt-4 px-2 transition"><Trash2 size={18}/></button>
+                                <div key={i} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-zinc-50 p-4 border border-zinc-200">
+                                    <div className="w-full sm:flex-1"><label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Beschluss / To-Do</label><input value={d.text} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].text = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} placeholder="Was wird gemacht?" className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition" /></div>
+                                    <div className="w-full sm:w-48 flex gap-2 items-end">
+                                        <div className="flex-1">
+                                            <label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Wer machts?</label>
+                                            <select value={d.assignee || ''} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].assignee = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition bg-white"><option value="">Zuständig...</option>{teamMembers.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                                        </div>
+                                        <button type="button" onClick={() => { const nd = [...editingProtocol.decisions]; nd.splice(i,1); setEditingProtocol({...editingProtocol, decisions: nd}); }} className="text-zinc-400 hover:text-red-500 p-3 transition bg-white border border-zinc-300 sm:border-0 sm:bg-transparent flex-shrink-0"><Trash2 size={18}/></button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
-                        <button type="button" onClick={() => setEditingProtocol({...editingProtocol, decisions: [...editingProtocol.decisions, {text: '', assignee: ''}]})} className="mt-4 bg-zinc-100 text-black px-6 py-3 text-[9px] uppercase tracking-widest font-bold hover:bg-zinc-200 transition">+ Neuen Beschluss hinzufügen</button>
+                        <button type="button" onClick={() => setEditingProtocol({...editingProtocol, decisions: [...editingProtocol.decisions, {text: '', assignee: ''}]})} className="mt-4 bg-zinc-100 text-black px-6 py-3 text-[9px] uppercase tracking-widest font-bold hover:bg-zinc-200 transition w-full sm:w-auto">+ Neuen Beschluss hinzufügen</button>
                     </div>
 
-                    <div className="flex justify-between items-center pt-8 border-t border-zinc-200 mt-8">
-                        {editingProtocol.id ? <button type="button" onClick={() => { if(confirm('Eintrag komplett löschen?')) { deleteDoc(doc(db,'protocols',editingProtocol.id)); logAction(`Protokoll gelöscht: ${editingProtocol.title}`); setEditingProtocol(null); } }} className="text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline flex items-center gap-2"><Trash2 size={14}/> Löschen</button> : <div/>} 
-                        <div className="flex gap-4">
-                            <button type="button" onClick={() => setEditingProtocol(null)} className="border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition">Abbrechen</button>
-                            <button type="submit" disabled={isUploading} className="bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl">{isUploading?'Speichert...':'Speichern'}</button>
+                    <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 mt-8 gap-4">
+                        {editingProtocol.id ? <button type="button" onClick={() => { if(confirm('Eintrag komplett löschen?')) { deleteDoc(doc(db,'protocols',editingProtocol.id)); logAction(`Protokoll gelöscht: ${editingProtocol.title}`); setEditingProtocol(null); } }} className="w-full md:w-auto justify-center text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline flex items-center gap-2 py-2"><Trash2 size={14}/> Löschen</button> : <div/>} 
+                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                            <button type="button" onClick={() => setEditingProtocol(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
+                            <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading?'Speichert...':'Speichern'}</button>
                         </div>
                     </div>
                 </form>
