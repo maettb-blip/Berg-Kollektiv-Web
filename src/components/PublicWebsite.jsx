@@ -70,12 +70,45 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [bookingStatus, setBookingStatus] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // --- Touch Swipe States ---
+    const [touchStart, setTouchStart] = useState(null);
+    const [touchEnd, setTouchEnd] = useState(null);
+    const minSwipeDistance = 50;
 
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 100);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+
+    // --- Observer für Mobile Scroll "Hover" Effekte ---
+    useEffect(() => {
+        // Observer NUR auf Touch-Geräten (ohne Maus) aktivieren
+        if (window.matchMedia("(hover: hover)").matches) return;
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('mobile-focus');
+                } else {
+                    entry.target.classList.remove('mobile-focus');
+                }
+            });
+        }, {
+            root: null,
+            rootMargin: '-30% 0px -30% 0px', // Löst in den mittleren 40% des Bildschirms aus
+            threshold: 0
+        });
+
+        // Kurz warten, damit React die DOM-Elemente gerendert hat
+        setTimeout(() => {
+            const elements = document.querySelectorAll('.tour-card, .team-img-container, #angebot .group');
+            elements.forEach(el => observer.observe(el));
+        }, 100);
+
+        return () => observer.disconnect();
+    }, [touren, angebotTab]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -101,6 +134,34 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         return () => clearInterval(timer);
     }, [selectedTour]);
 
+    // --- Touch Swipe Handler ---
+    const onTouchStart = (e) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+    
+    const onTouchMove = (e) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+    
+    const onTouchEndHandler = () => {
+        if (!touchStart || !touchEnd) return;
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+        
+        const imgs = selectedTour?.images || [selectedTour?.image];
+        if (!imgs || imgs.length <= 1) return;
+
+        if (isLeftSwipe) {
+            // Nach links wischen = Nächstes Bild
+            setIsLightboxOpen((prev) => (prev + 1) % imgs.length);
+        } else if (isRightSwipe) {
+            // Nach rechts wischen = Vorheriges Bild
+            setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length);
+        }
+    };
+
     const handleAnfrage = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
@@ -116,7 +177,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         try {
             await addDoc(collection(db, 'anfragen'), data);
             
-            // EmailJS: Kontakt-Anfrage senden
             if (window.emailjs) {
                 await window.emailjs.send(
                     "service_b02rsz7", 
@@ -172,7 +232,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 await addDoc(collection(db, 'anmeldungen'), data);
                 await updateDoc(doc(db, 'touren', selectedTour.id), { angemeldet: increment(1) });
                 
-                // EmailJS: Touren-Anmeldung senden
                 if (window.emailjs) {
                     await window.emailjs.send(
                         "service_b02rsz7", 
@@ -200,11 +259,23 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
     return (
         <div className="min-h-screen bg-bg text-accent selection:bg-black selection:text-white">
-            {/* INJEKTION DER SCHRIFTART FÜR DIE SERIF ÜBERSCHRIFTEN */}
             <style dangerouslySetInnerHTML={{__html: `
                 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
                 body { font-family: 'Outfit', sans-serif !important; }
                 .serif { font-family: 'Playfair Display', serif !important; }
+                
+                /* Mobile Focus CSS: Überschreibt die Hover-Zustände auf Touchgeräten */
+                @media (hover: none) {
+                    .tour-card.mobile-focus .grayscale { filter: grayscale(0%) !important; }
+                    .tour-card.mobile-focus .transform { transform: translateX(0.75rem) !important; }
+                    .tour-card.mobile-focus .w-8 { width: 4rem !important; }
+                    
+                    .team-img-container.mobile-focus img { filter: grayscale(0%) !important; transform: scale(1.05) !important; }
+                    
+                    #angebot .group.mobile-focus { border-color: black !important; }
+                    #angebot .group.mobile-focus h3 { transform: translateX(0.25rem) !important; }
+                    #angebot .group.mobile-focus .opacity-0 { opacity: 1 !important; }
+                }
             `}} />
 
             <nav className="fixed w-full z-50 px-6 md:px-12 py-8 flex justify-between items-center text-white mix-blend-difference">
@@ -484,21 +555,41 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
             
+            {/* Vollbild Lightbox mit Touch/Swipe */}
             {isLightboxOpen !== null && selectedTour && (
-                <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center p-4 md:p-12 fade-in">
+                <div 
+                    className="fixed inset-0 z-[300] bg-black flex items-center justify-center p-4 md:p-12 fade-in"
+                    onTouchStart={onTouchStart}
+                    onTouchMove={onTouchMove}
+                    onTouchEnd={onTouchEndHandler}
+                >
                     <div className="absolute inset-0" onClick={() => setIsLightboxOpen(null)}></div>
-                    <button onClick={() => setIsLightboxOpen(null)} className="absolute top-8 right-8 text-white text-5xl z-[310]">&times;</button>
+                    <button onClick={() => setIsLightboxOpen(null)} className="absolute top-8 right-8 text-white text-5xl z-[310] p-4">&times;</button>
                     {(() => {
                         const imgs = selectedTour.images || [selectedTour.image];
                         if (imgs.length <= 1) return null;
                         return (
                             <>
-                                <button onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }} className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 text-white text-4xl md:text-6xl z-[310]">&#8249;</button>
-                                <button onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }} className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 text-white text-4xl md:text-6xl z-[310]">&#8250;</button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }} 
+                                    className="absolute left-0 md:left-8 top-1/2 -translate-y-1/2 text-white text-5xl md:text-6xl z-[310] p-6 md:p-8"
+                                >
+                                    &#8249;
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }} 
+                                    className="absolute right-0 md:right-8 top-1/2 -translate-y-1/2 text-white text-5xl md:text-6xl z-[310] p-6 md:p-8"
+                                >
+                                    &#8250;
+                                </button>
                             </>
                         );
                     })()}
-                    <img src={(selectedTour.images || [selectedTour.image])[isLightboxOpen]} className="relative max-w-full max-h-full object-contain z-[310] shadow-2xl transition-all duration-500" onClick={(e) => e.stopPropagation()} alt="" />
+                    <img 
+                        src={(selectedTour.images || [selectedTour.image])[isLightboxOpen]} 
+                        className="relative max-w-full max-h-full object-contain z-[310] shadow-2xl transition-all duration-500 pointer-events-none" 
+                        alt="" 
+                    />
                 </div>
             )}
         </div>
