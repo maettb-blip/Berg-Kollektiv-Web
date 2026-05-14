@@ -24,9 +24,36 @@ const Instagram = (props) => (
 );
 
 const TEAM = [
-    { name: "ADRIAN BÜSCHLEN", title: "BERGFÜHRER IVBV", desc: "Skifanatiker und Bergführer aus Leidenschaft. Liebt steile Flanken und technische Grate.", image: "/adrian.jpg" },
-    { name: "JENS Schärer", title: "BERGFÜHRER IVBV", desc: "Spezialist für Eisklettern und winterliche Expeditionen. Sucht immer die perfekte Linie im Eis.", image: "/jens.jpg" },
-    { name: "MATTHIAS Bettschen", title: "BERGFÜHRER IVBV", desc: "Kletterexperte im Granit und Kalk. Vermittelt Technik und Freude am Fels mit grosser Geduld.", image: "/matthias.jpg" }
+    { 
+        name: "ADRIAN BÜSCHLEN", 
+        title: "BERGFÜHRER IVBV", 
+        desc: "Skifanatiker und Bergführer aus Leidenschaft. Liebt steile Flanken und technische Grate.", 
+        image: "/adrian.jpg",
+        superkraft: "Findet im dichtesten Nebel zielsicher die Kaffeemaschine der Hütte.",
+        schwaeche: "Wird 'grumpy', wenn der Gipfelschnaps im Tal vergessen wurde.",
+        snack: "Getrocknete Mangos & Appenzeller Biberli",
+        zitat: "Steiler ist geiler."
+    },
+    { 
+        name: "JENS Schärer", 
+        title: "BERGFÜHRER IVBV", 
+        desc: "Spezialist für Eisklettern und winterliche Expeditionen. Sucht immer die perfekte Linie im Eis.", 
+        image: "/jens.jpg",
+        superkraft: "Hat eine eingebaute Heizspirale in den Fingern (friert nie beim Eisklettern).",
+        schwaeche: "Vergisst immer, wo er die Stirnlampe hingelegt hat (meistens auf dem Kopf).",
+        snack: "Käse. Einfach nur ein riesiges Stück Bergkäse.",
+        zitat: "Eis ist auch nur Wasser mit Haltung."
+    },
+    { 
+        name: "MATTHIAS Bettschen", 
+        title: "BERGFÜHRER IVBV", 
+        desc: "Kletterexperte im Granit und Kalk. Vermittelt Technik und Freude am Fels mit grosser Geduld.", 
+        image: "/matthias.jpg",
+        superkraft: "Findet an einer aalglatten Felswand noch einen Hook für den kleinen Zeh.",
+        schwaeche: "Kann an keiner Engadiner Dorfbäckerei vorbeigehen, ohne eine Nusstorte zu kaufen.",
+        snack: "Engadiner Nusstorte (was sonst?)",
+        zitat: "Ruhe bewahren und weiterklettern."
+    }
 ];
 
 const ANGEBOT_SOMMER = [
@@ -65,6 +92,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [angebotTab, setAngebotTab] = useState('sommer');
     const [selectedAngebot, setSelectedAngebot] = useState(null);
     const [selectedTour, setSelectedTour] = useState(null);
+    const [selectedTeamMember, setSelectedTeamMember] = useState(null);
     const [isBookingMode, setIsBookingMode] = useState(false);
     const [isLightboxOpen, setIsLightboxOpen] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -389,15 +417,18 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         <div className="text-center mb-24"><h2 className="serif text-4xl italic">Das Kollektiv</h2></div>
                         <div className="grid md:grid-cols-3 gap-16 md:gap-8 lg:gap-16">
                             {TEAM.map((member, i) => (
-                                <div key={i} className="text-center flex flex-col items-center group cursor-pointer">
-                                    <div className="team-img-container aspect-[4/5] w-full bg-zinc-100 mb-10 overflow-hidden">
+                                <div key={i} onClick={() => setSelectedTeamMember(member)} className="text-center flex flex-col items-center group cursor-pointer">
+                                    <div className="team-img-container aspect-[4/5] w-full bg-zinc-100 mb-10 overflow-hidden relative">
                                         <img src={member.image} alt={member.name} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
                                     </div>
                                     <div className="space-y-4 max-w-[280px]">
-                                        <h3 className="text-[11px] font-bold uppercase tracking-[0.3em]">{member.name}</h3>
+                                        <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] group-hover:text-zinc-500 transition-colors">{member.name}</h3>
                                         <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-medium">{member.title}</p>
                                         <div className="h-px w-8 bg-zinc-200 mx-auto my-6"></div>
                                         <p className="text-zinc-500 text-[10px] leading-loose font-light tracking-wide uppercase">{member.desc}</p>
+                                        <div className="pt-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <span className="text-[8px] uppercase tracking-widest text-zinc-400 border-b border-zinc-200 pb-1">Steckbrief ansehen</span>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -569,6 +600,50 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
             
+            {/* Team Member Modal (Steckbrief) */}
+            {selectedTeamMember && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 md:p-12 fade-in">
+                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedTeamMember(null)}></div>
+                    <div className="relative bg-white w-full max-w-4xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
+                        
+                        {/* Bild-Seite */}
+                        <div className="w-full md:w-5/12 h-64 md:h-auto relative flex-shrink-0">
+                            <img src={selectedTeamMember.image} className="w-full h-full object-cover grayscale" alt={selectedTeamMember.name} />
+                            <button onClick={() => setSelectedTeamMember(null)} className="absolute top-4 right-4 text-white text-3xl z-10 md:hidden">&times;</button>
+                        </div>
+
+                        {/* Text-Seite */}
+                        <div className="w-full md:w-7/12 p-8 md:p-12 bg-[#f9f9f7] overflow-y-auto relative">
+                            <button onClick={() => setSelectedTeamMember(null)} className="hidden md:block absolute top-6 right-8 text-zinc-400 hover:text-black text-4xl transition-colors">&times;</button>
+                            
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{selectedTeamMember.title}</p>
+                            <h2 className="serif text-3xl md:text-4xl italic mb-6">{selectedTeamMember.name}</h2>
+                            <p className="text-sm text-zinc-600 font-light leading-relaxed mb-8">{selectedTeamMember.desc}</p>
+                            
+                            {/* Der lustige "Steckbrief" */}
+                            <div className="space-y-6 border-t border-zinc-200 pt-8">
+                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Superkraft</span>
+                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.superkraft}</span>
+                                </div>
+                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Kryptonit</span>
+                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.schwaeche}</span>
+                                </div>
+                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Touren-Snack</span>
+                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.snack}</span>
+                                </div>
+                                <div className="grid grid-cols-12 gap-4">
+                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Lebensmotto</span>
+                                    <span className="col-span-12 md:col-span-8 text-xs italic text-zinc-700 leading-relaxed">"{selectedTeamMember.zitat}"</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Vollbild Lightbox mit Touch/Swipe */}
             {isLightboxOpen !== null && selectedTour && (
                 <div 
