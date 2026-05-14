@@ -71,6 +71,9 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [bookingStatus, setBookingStatus] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
+    // --- Ladezustand für das Video ---
+    const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+    
     // --- Touch Swipe States ---
     const [touchStart, setTouchStart] = useState(null);
     const [touchEnd, setTouchEnd] = useState(null);
@@ -84,7 +87,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
     // --- Observer für Mobile Scroll "Hover" Effekte ---
     useEffect(() => {
-        // Observer NUR auf Touch-Geräten (ohne Maus) aktivieren
         if (window.matchMedia("(hover: hover)").matches) return;
 
         const observer = new IntersectionObserver((entries) => {
@@ -97,11 +99,10 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             });
         }, {
             root: null,
-            rootMargin: '-30% 0px -30% 0px', // Löst in den mittleren 40% des Bildschirms aus
+            rootMargin: '-30% 0px -30% 0px',
             threshold: 0
         });
 
-        // Kurz warten, damit React die DOM-Elemente gerendert hat
         setTimeout(() => {
             const elements = document.querySelectorAll('.tour-card, .team-img-container, #angebot .group');
             elements.forEach(el => observer.observe(el));
@@ -154,10 +155,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         if (!imgs || imgs.length <= 1) return;
 
         if (isLeftSwipe) {
-            // Nach links wischen = Nächstes Bild
             setIsLightboxOpen((prev) => (prev + 1) % imgs.length);
         } else if (isRightSwipe) {
-            // Nach rechts wischen = Vorheriges Bild
             setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length);
         }
     };
@@ -264,7 +263,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 body { font-family: 'Outfit', sans-serif !important; }
                 .serif { font-family: 'Playfair Display', serif !important; }
                 
-                /* Mobile Focus CSS: Überschreibt die Hover-Zustände auf Touchgeräten */
                 @media (hover: none) {
                     .tour-card.mobile-focus .grayscale { filter: grayscale(0%) !important; }
                     .tour-card.mobile-focus .transform { transform: translateX(0.75rem) !important; }
@@ -278,7 +276,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 }
             `}} />
 
-            <nav className="fixed w-full z-50 px-6 md:px-12 py-8 flex justify-between items-center text-white mix-blend-difference">
+            {/* Navigation ändert die Farbe basierend auf dem Ladezustand des Videos (damit man sie auf weissem Hintergrund sieht) */}
+            <nav className={`fixed w-full z-50 px-6 md:px-12 py-8 flex justify-between items-center transition-colors duration-1000 ${isVideoLoaded ? 'text-white mix-blend-difference' : 'text-black'}`}>
                 <div className="text-lg md:text-xl tracking-[0.3em] uppercase cursor-pointer z-50" onClick={() => window.scrollTo(0,0)}>
                     BERG <span className="font-bold">KOLLEKTIV</span>
                 </div>
@@ -287,28 +286,43 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <a href="#touren" className="nav-link">Aktuelle Touren</a>
                     <a href="#kollektiv" className="nav-link">Kollektiv</a>
                     <a href="#kontakt" className="nav-link">Kontakt</a>
-                    <button onClick={onGoToAdmin} className="opacity-30 hover:opacity-100 transition border-l border-white/20 pl-6">Admin</button>
+                    <button onClick={onGoToAdmin} className="opacity-30 hover:opacity-100 transition border-l border-current pl-6">Admin</button>
                 </div>
                 <button 
-                    className={`md:hidden z-50 relative text-xl w-10 h-10 flex items-center justify-center backdrop-blur-md rounded-full border border-white/20 text-white drop-shadow-md transition-all ${!isMobileMenuOpen && isScrolled ? 'bg-black/60' : 'bg-black/20'}`}
+                    className={`md:hidden z-50 relative text-xl w-10 h-10 flex items-center justify-center backdrop-blur-md rounded-full border border-current drop-shadow-md transition-all ${!isMobileMenuOpen && isScrolled ? (isVideoLoaded ? 'bg-black/60 text-white' : 'bg-white/60 text-black') : 'bg-transparent text-current'}`}
                     onClick={() => !isMobileMenuOpen && isScrolled ? window.scrollTo({ top: 0, behavior: 'smooth' }) : setIsMobileMenuOpen(!isMobileMenuOpen)}
                 >
                     {isMobileMenuOpen ? '✕' : (isScrolled ? '↑' : '☰')}
                 </button>
-                <div className={`fixed inset-0 bg-black/98 backdrop-blur-lg flex flex-col items-center justify-center space-y-10 transition-all duration-500 md:hidden z-40 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                <div className={`fixed inset-0 bg-black/98 backdrop-blur-lg flex flex-col items-center justify-center space-y-10 transition-all duration-500 md:hidden z-40 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto text-white' : 'opacity-0 pointer-events-none'}`}>
                     {['angebot', 'touren', 'kollektiv', 'kontakt'].map(link => (
-                        <a key={link} href={`#${link}`} onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-light uppercase tracking-[0.2em] text-white hover:text-zinc-400 transition-colors">{link}</a>
+                        <a key={link} href={`#${link}`} onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-light uppercase tracking-[0.2em] hover:text-zinc-400 transition-colors">{link}</a>
                     ))}
                     <button onClick={() => { onGoToAdmin(); setIsMobileMenuOpen(false); }} className="text-xs uppercase tracking-[0.2em] text-zinc-500 mt-12 pt-8 border-t border-zinc-800">Admin Login</button>
                 </div>
             </nav>
 
             <main className="fade-in">
-                <header className="relative h-screen flex items-center justify-center bg-black overflow-hidden px-4">
-                    <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover opacity-60 grayscale">
+                {/* Dynamischer Header mit weissem Fallback */}
+                <header className={`relative h-screen flex items-center justify-center overflow-hidden px-4 transition-colors duration-1000 ${isVideoLoaded ? 'bg-black' : 'bg-white'}`}>
+                    
+                    {/* Fallback Text: Nur sichtbar wenn das Video noch lädt */}
+                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 z-0 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}>
+                        <span className="text-xs md:text-sm uppercase tracking-[0.4em] text-zinc-300 font-bold">Berg Kollektiv</span>
+                    </div>
+
+                    <video 
+                        autoPlay muted loop playsInline 
+                        preload="auto"
+                        onCanPlay={() => setIsVideoLoaded(true)}
+                        onLoadedData={() => setIsVideoLoaded(true)}
+                        className={`absolute inset-0 w-full h-full object-cover grayscale transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-60' : 'opacity-0'}`}
+                    >
                         <source src="/hero-video.mp4" type="video/mp4" />
                     </video>
-                    <div className={`relative z-10 text-center text-white w-full max-w-[95vw] mx-auto mix-blend-difference transition-all duration-500 ${isMobileMenuOpen ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+                    
+                    {/* Haupt-Schriftzug blendet erst ein, wenn das Video bereit ist */}
+                    <div className={`relative z-10 text-center text-white w-full max-w-[95vw] mx-auto mix-blend-difference transition-all duration-1000 ${isMobileMenuOpen || !isVideoLoaded ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
                         <p className="uppercase tracking-[0.6em] text-[10px] mb-8 opacity-70">Bergführer IVBV</p>
                         <h1 className="font-normal leading-tight whitespace-nowrap text-[4.8vw] sm:text-[4vw] md:text-[3.5vw] lg:text-5xl xl:text-6xl uppercase tracking-[0.1em] sm:tracking-[0.2em] md:tracking-[0.3em] lg:tracking-[0.4em]">
                             Berg &nbsp;·&nbsp; Mensch &nbsp;·&nbsp; Erlebnis
@@ -351,7 +365,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                             {touren && touren.filter(t => t.visible !== false).map(tour => (
                                 <div key={tour.id} className="tour-card group cursor-pointer" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); }}>
                                     <div className="aspect-[4/5] overflow-hidden bg-zinc-100 mb-8 grayscale group-hover:grayscale-0 transition-all duration-1000 relative">
-                                        <img src={tour.image} className="w-full h-full object-cover" loading="lazy" alt={tour.title} />
+                                        <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={tour.title} />
                                         <div className="absolute top-4 right-4 bg-white/95 px-4 py-2 text-[8px] uppercase tracking-[0.2em] font-bold">
                                             {tour.maxPlaetze - tour.angemeldet > 0 ? `${tour.maxPlaetze - tour.angemeldet} Plätze` : 'Voll'}
                                         </div>
@@ -377,7 +391,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                             {TEAM.map((member, i) => (
                                 <div key={i} className="text-center flex flex-col items-center group cursor-pointer">
                                     <div className="team-img-container aspect-[4/5] w-full bg-zinc-100 mb-10 overflow-hidden">
-                                        <img src={member.image} alt={member.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
+                                        <img src={member.image} alt={member.name} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
                                     </div>
                                     <div className="space-y-4 max-w-[280px]">
                                         <h3 className="text-[11px] font-bold uppercase tracking-[0.3em]">{member.name}</h3>
@@ -408,7 +422,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 </a>
                             </div>
                             <div className="flex flex-col items-center space-y-4">
-                                <img src="/Logo IVBV negativ.svg" alt="IVBV Logo" className="h-20 w-auto object-contain grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-500" />
+                                <img src="/Logo IVBV negativ.svg" alt="IVBV Logo" loading="lazy" decoding="async" className="h-20 w-auto object-contain grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-500" />
                                 <p className="text-[8px] uppercase tracking-[0.3em] text-zinc-400 text-center">Internationaler Verband der<br/>Bergführervereinigungen</p>
                             </div>
                             <div className="flex flex-col items-center md:items-end text-center md:text-right space-y-2">
@@ -427,7 +441,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedAngebot(null)}></div>
                     <div className="relative bg-white w-full h-full md:max-h-[90vh] md:max-w-2xl shadow-2xl overflow-y-auto fade-in">
                         <div className="h-80 md:h-[40vh] relative">
-                            <img src={selectedAngebot.image} className="w-full h-full object-cover" alt="" />
+                            <img src={selectedAngebot.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
                             <button onClick={() => setSelectedAngebot(null)} className="absolute top-6 right-6 text-white text-3xl z-10">&times;</button>
                             <div className="absolute inset-0 bg-black/30 flex items-end p-8"><h2 className="serif text-4xl italic text-white">{selectedAngebot.title}</h2></div>
                         </div>
@@ -458,7 +472,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         <div className="h-[50vh] md:h-[60vh] overflow-hidden relative flex-shrink-0 cursor-pointer" onClick={() => setIsLightboxOpen(currentImageIndex)}>
                             {(selectedTour.images || [selectedTour.image]).map((img, idx) => (
                                 <div key={idx} className={`absolute inset-0 transition-opacity duration-1000 ${idx === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}>
-                                    <img src={img} className="absolute inset-0 w-full h-full object-cover" alt="" />
+                                    <img src={img} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" alt="" />
                                 </div>
                             ))}
                             <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end">
@@ -587,6 +601,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     })()}
                     <img 
                         src={(selectedTour.images || [selectedTour.image])[isLightboxOpen]} 
+                        loading="lazy" 
+                        decoding="async" 
                         className="relative max-w-full max-h-full object-contain z-[310] shadow-2xl transition-all duration-500 pointer-events-none" 
                         alt="" 
                     />
