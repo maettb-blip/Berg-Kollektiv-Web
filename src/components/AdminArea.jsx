@@ -26,6 +26,16 @@ const storage = getStorage(app);
 
 const KANBAN_COLUMNS = ['Offen', 'In Bearbeitung', 'Blockiert', 'Erledigt'];
 
+// --- Hilfsfunktionen für Fallbacks bei alten Tourendaten ---
+const getKat = (t) => {
+    if (!t) return 'Hochtour';
+    if (t.kategorie) return t.kategorie;
+    const title = (t.title || '').toLowerCase();
+    return title.includes('kurs') ? 'Kurse' : title.includes('ski') ? 'Skitour' : title.includes('klett') ? 'Klettern' : 'Hochtour';
+};
+const getTech = (t) => t && t.technik ? Number(t.technik) : 2;
+const getAusd = (t) => t && t.ausdauer ? Number(t.ausdauer) : 2;
+
 export default function AdminArea({ user, touren, onLogout }) {
   const [adminSubView, setAdminSubView] = useState('dashboard');
   
@@ -66,6 +76,10 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [docSubFilter, setDocSubFilter] = useState('Alle');
   const [protocolFilter, setProtocolFilter] = useState('Alle');
   
+  // Filter States für die Touren-Übersicht
+  const [tourStatusFilter, setTourStatusFilter] = useState('Öffentlich');
+  const [tourKatFilter, setTourKatFilter] = useState('Alle');
+
   const [isUploading, setIsUploading] = useState(false);
   
   // Drag & Drop States für Dokumente
@@ -225,6 +239,11 @@ export default function AdminArea({ user, touren, onLogout }) {
             anforderungen: fd.get('anforderungen'), 
             ablauf: fd.get('ablauf'), 
             material: fd.get('material'),
+            // Neue Filter-Kategorien speichern
+            kategorie: fd.get('kategorie') || 'Hochtour',
+            technik: parseInt(fd.get('technik')) || 2,
+            ausdauer: parseInt(fd.get('ausdauer')) || 2,
+            
             image: combinedImages[0] || '/hochtour.jpg', 
             images: combinedImages, 
             maxPlaetze: parseInt(fd.get('maxPlaetze')) || 4,
@@ -749,12 +768,42 @@ export default function AdminArea({ user, touren, onLogout }) {
 
             {adminSubView === 'touren' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <h3 className="serif text-3xl italic">Touren Verwalten</h3>
-                        <button onClick={() => setEditingTour({ title: '', visible: true, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', material: '' })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
+                        <button onClick={() => setEditingTour({ title: '', visible: true, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', kategorie: 'Hochtour', technik: 2, ausdauer: 2 })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
                     </div>
+
+                    {/* FILTER BEREICH (nur anzeigen, wenn man gerade keine Tour bearbeitet) */}
+                    {!editingTour && (
+                        <div className="flex flex-col gap-4 mb-8 bg-zinc-50 p-4 md:p-6 border border-zinc-200">
+                            <div className="flex flex-wrap gap-4 border-b border-zinc-200 pb-4">
+                                {['Öffentlich', 'Versteckt', 'Alle'].map(status => (
+                                    <button 
+                                        key={status} 
+                                        onClick={() => setTourStatusFilter(status)}
+                                        className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${tourStatusFilter === status ? 'bg-black text-white' : 'bg-white text-zinc-500 border border-zinc-200 hover:border-black hover:text-black'}`}
+                                    >
+                                        {status === 'Öffentlich' ? 'Öffentliche Touren' : status === 'Versteckt' ? 'Versteckte Entwürfe' : 'Alle Touren'}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex flex-wrap gap-2 items-center">
+                                <span className="text-[10px] uppercase tracking-widest text-zinc-400 mr-2 font-bold w-full sm:w-auto">Kategorie:</span>
+                                {['Alle', 'Hochtour', 'Skitour', 'Klettern', 'Kurse'].map(kat => (
+                                    <button 
+                                        key={kat} 
+                                        onClick={() => setTourKatFilter(kat)}
+                                        className={`px-3 py-1.5 text-[9px] uppercase tracking-widest transition-colors border-b-2 ${tourKatFilter === kat ? 'border-black text-black font-bold' : 'border-transparent text-zinc-500 hover:text-black'}`}
+                                    >
+                                        {kat}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {editingTour ? (
-                        <form onSubmit={saveTour} className="space-y-8 bg-zinc-50 p-5 md:p-8 border border-zinc-200 shadow-sm">
+                        <form onSubmit={saveTour} className="space-y-8 bg-zinc-50 p-5 md:p-8 border border-zinc-200 shadow-sm fade-in">
                             <div className="flex justify-between items-center border-b border-zinc-200 pb-4 mb-6">
                                 <h3 className="serif text-2xl italic">{editingTour.id ? 'Tour bearbeiten' : 'Neue Tour anlegen'}</h3>
                             </div>
@@ -813,6 +862,35 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 </div>
                             </div>
 
+                            {/* NEU: Dropdowns für Kategorien & Filter */}
+                            <div className="grid md:grid-cols-3 gap-6 pt-6 border-t border-zinc-200">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Hauptkategorie</label>
+                                    <select name="kategorie" defaultValue={getKat(editingTour)} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
+                                        <option value="Hochtour">Hochtour</option>
+                                        <option value="Skitour">Skitour</option>
+                                        <option value="Klettern">Klettern</option>
+                                        <option value="Kurse">Kurse</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Level Technik (1-3)</label>
+                                    <select name="technik" defaultValue={getTech(editingTour)} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
+                                        <option value="1">1 - Einfach / Basis</option>
+                                        <option value="2">2 - Mittel / Fortgeschritten</option>
+                                        <option value="3">3 - Schwer / Experte</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Level Ausdauer (1-3)</label>
+                                    <select name="ausdauer" defaultValue={getAusd(editingTour)} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
+                                        <option value="1">1 - Einfach / Basis</option>
+                                        <option value="2">2 - Mittel / Fortgeschritten</option>
+                                        <option value="3">3 - Schwer / Hohes Level</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Beschreibung (Haupttext)</label>
                                 <textarea name="description" defaultValue={editingTour.description} required className="w-full border border-zinc-300 p-5 text-base h-48 resize-y mt-2 outline-none focus:border-black transition" />
@@ -832,19 +910,42 @@ export default function AdminArea({ user, touren, onLogout }) {
                             </div>
                         </form>
                     ) : (
-                        <div className="space-y-4">
-                            {touren && touren.map(t => (
-                            <div key={t.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
-                                <div>
-                                    <p className="text-sm font-bold uppercase tracking-widest mb-1">{t.title} {t.visible===false && <span className="text-red-500 ml-3 bg-red-50 px-2 py-1">[VERSTECKT]</span>}</p>
-                                    <p className="text-xs text-zinc-500">{t.date}</p>
+                        <div className="space-y-4 fade-in">
+                            {touren.filter(t => {
+                                // Filter Logik anwenden
+                                const isVisible = t.visible !== false;
+                                if (tourStatusFilter === 'Öffentlich' && !isVisible) return false;
+                                if (tourStatusFilter === 'Versteckt' && isVisible) return false;
+                                if (tourKatFilter !== 'Alle' && getKat(t) !== tourKatFilter) return false;
+                                return true;
+                            }).map(t => (
+                                <div key={t.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
+                                    <div>
+                                        <p className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center flex-wrap gap-2">
+                                            {t.title} 
+                                            <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 text-[8px] rounded-sm">{getKat(t)}</span>
+                                            {t.visible === false && <span className="text-red-500 bg-red-50 px-2 py-0.5 text-[8px]">[VERSTECKT]</span>}
+                                        </p>
+                                        <p className="text-xs text-zinc-500">{t.date} — Level T{getTech(t)}/A{getAusd(t)}</p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
+                                        <button onClick={() => setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
+                                        <button onClick={() => deleteTour(t.id, t.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                                    </div>
                                 </div>
-                                <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
-                                    <button onClick={() => setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
-                                    <button onClick={() => deleteTour(t.id, t.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                            ))}
+                            {touren.filter(t => {
+                                const isVisible = t.visible !== false;
+                                if (tourStatusFilter === 'Öffentlich' && !isVisible) return false;
+                                if (tourStatusFilter === 'Versteckt' && isVisible) return false;
+                                if (tourKatFilter !== 'Alle' && getKat(t) !== tourKatFilter) return false;
+                                return true;
+                            }).length === 0 && (
+                                <div className="text-center p-12 border border-dashed border-zinc-200 text-zinc-400">
+                                    <p className="text-sm italic">Keine Touren gefunden, die zu den aktuellen Filtern passen.</p>
                                 </div>
-                            </div>
-                        ))}</div>
+                            )}
+                        </div>
                     )}
                 </div>
             )}
