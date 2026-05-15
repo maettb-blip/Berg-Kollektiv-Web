@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp } from "firebase/firestore";
-import { FileText, Tag, Filter, Search } from 'lucide-react';
+import { FileText, Tag, Filter, Search, Info } from 'lucide-react';
 
 // ==========================================
 // FIREBASE KONFIGURATION
@@ -87,9 +87,23 @@ const ausdDetails = {
     3: "Schwer – Sehr gute Kondition für lange, anstrengende Etappen mit über 7 Stunden Gehzeit pro Tag."
 };
 
-const Accordion = ({ title, content }) => {
+// --- Kleine Punkte-Anzeige für Schwierigkeit (1-3) ---
+const DifficultyDots = ({ label, level, info }) => (
+    <div className="flex items-center gap-2 relative group/tooltip" title={info}>
+        <span className="text-[9px] uppercase tracking-widest text-zinc-500 w-16">{label}</span>
+        <div className="flex gap-1.5">
+            {[1, 2, 3].map(i => (
+                <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= level ? 'bg-black' : 'bg-zinc-200'}`}></div>
+            ))}
+        </div>
+        {info && <Info size={10} className="text-zinc-300 group-hover/tooltip:text-black transition-colors" />}
+    </div>
+);
+
+// --- Modifiziertes Accordion (unterstützt nun content ODER children) ---
+const Accordion = ({ title, content, children }) => {
     const [isOpen, setIsOpen] = useState(false);
-    if (!content) return null;
+    if (!content && !children) return null;
     return (
         <div className="border-b border-zinc-100 py-4">
             <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center group focus:outline-none">
@@ -97,7 +111,7 @@ const Accordion = ({ title, content }) => {
                 <span className="text-xl font-light text-zinc-400 group-hover:text-black transition-colors">{isOpen ? '−' : '+'}</span>
             </button>
             <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[1000px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
-                <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line pb-4">{content}</p>
+                {children ? children : <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line pb-4">{content}</p>}
             </div>
         </div>
     );
@@ -121,6 +135,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [filterKategorie, setFilterKategorie] = useState('Alle');
     const [filterTechnik, setFilterTechnik] = useState('Alle');
     const [filterAusdauer, setFilterAusdauer] = useState('Alle');
+    const [showLevelInfo, setShowLevelInfo] = useState(false); // NEU: Toggle für Info-Feld
 
     // --- Ladezustand für das Video ---
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
@@ -377,10 +392,12 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                         <div className="transform transition-transform duration-500 group-hover:translate-x-3 w-full">
                                             <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{tour.date}</p>
                                             <h3 className="text-xl font-light mb-2 tracking-wide uppercase">{tour.title}</h3>
-                                            <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200">
-                                                <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold">{tour.price}</p>
-                                                {/* Dezenter Schwierigkeits-Hinweis */}
-                                                <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400">Tech {getTech(tour)} · Ausd {getAusd(tour)}</p>
+                                            <div className="flex justify-between items-end mt-4 pt-4 border-t border-zinc-200">
+                                                <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold pb-1">{tour.price}</p>
+                                                <div className="flex flex-col gap-1.5 items-end">
+                                                    <DifficultyDots label="Technik" level={getTech(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -463,44 +480,74 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         <button onClick={() => setIsAllToursModalOpen(false)} className="w-12 h-12 flex items-center justify-center bg-zinc-100 hover:bg-black hover:text-white rounded-full transition-colors text-2xl">&times;</button>
                     </div>
                     
-                    {/* Filter Leiste */}
+                    {/* Filter Leiste & Info Button */}
                     <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
-                        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
-                            <div className="flex flex-col sm:flex-row gap-6">
-                                <div className="flex items-center gap-3">
-                                    <Filter size={16} className="text-zinc-400" />
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
-                                    <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                        <option value="Alle">Alle Kategorien</option>
-                                        <option value="Kurse">Kurse</option>
-                                        <option value="Klettern">Klettern</option>
-                                        <option value="Skitour">Skitour</option>
-                                        <option value="Hochtour">Hochtour</option>
-                                    </select>
+                        <div className="max-w-7xl mx-auto">
+                            <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
+                                <div className="flex flex-col sm:flex-row gap-6">
+                                    <div className="flex items-center gap-3">
+                                        <Filter size={16} className="text-zinc-400" />
+                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
+                                        <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                            <option value="Alle">Alle Kategorien</option>
+                                            <option value="Kurse">Kurse</option>
+                                            <option value="Klettern">Klettern</option>
+                                            <option value="Skitour">Skitour</option>
+                                            <option value="Hochtour">Hochtour</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
+                                        <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                            <option value="Alle">Alle Level</option>
+                                            <option value="1">1 - Einfach</option>
+                                            <option value="2">2 - Mittel</option>
+                                            <option value="3">3 - Schwer</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
+                                        <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                            <option value="Alle">Alle Level</option>
+                                            <option value="1">1 - Einfach</option>
+                                            <option value="2">2 - Mittel</option>
+                                            <option value="3">3 - Schwer</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
-                                    <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                        <option value="Alle">Alle Level</option>
-                                        <option value="1">1 - Einfach</option>
-                                        <option value="2">2 - Mittel</option>
-                                        <option value="3">3 - Schwer</option>
-                                    </select>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
-                                    <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                        <option value="Alle">Alle Level</option>
-                                        <option value="1">1 - Einfach</option>
-                                        <option value="2">2 - Mittel</option>
-                                        <option value="3">3 - Schwer</option>
-                                    </select>
-                                </div>
+                                
+                                <button 
+                                    onClick={() => setShowLevelInfo(!showLevelInfo)} 
+                                    className={`flex items-center gap-2 px-4 py-2 border transition-colors text-[10px] uppercase tracking-widest font-bold ${showLevelInfo ? 'bg-black text-white border-black' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100 hover:text-black'}`}
+                                >
+                                    <Info size={14} /> Info Technik & Ausdauer
+                                </button>
                             </div>
                             
-                            <div className="text-[10px] text-zinc-400 italic bg-zinc-50 px-4 py-2 border border-zinc-100">
-                                <b>Info:</b> 1 = Einfach | 2 = Mittel | 3 = Schwer
-                            </div>
+                            {/* Aufklappbarer Info Bereich für Technik & Ausdauer */}
+                            {showLevelInfo && (
+                                <div className="mt-6 p-6 md:p-8 bg-[#f9f9f7] border border-zinc-200 text-xs font-light leading-relaxed relative fade-in">
+                                    <button onClick={() => setShowLevelInfo(false)} className="absolute top-4 right-4 text-2xl text-zinc-400 hover:text-black leading-none">&times;</button>
+                                    <div className="grid md:grid-cols-2 gap-8">
+                                        <div>
+                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-black mb-4 border-b border-zinc-200 pb-2">Level Technik</h4>
+                                            <ul className="space-y-3 text-zinc-600">
+                                                <li><span className="font-bold text-black">Level 1:</span> {techDetails[1]}</li>
+                                                <li><span className="font-bold text-black">Level 2:</span> {techDetails[2]}</li>
+                                                <li><span className="font-bold text-black">Level 3:</span> {techDetails[3]}</li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-black mb-4 border-b border-zinc-200 pb-2">Level Ausdauer</h4>
+                                            <ul className="space-y-3 text-zinc-600">
+                                                <li><span className="font-bold text-black">Level 1:</span> {ausdDetails[1]}</li>
+                                                <li><span className="font-bold text-black">Level 2:</span> {ausdDetails[2]}</li>
+                                                <li><span className="font-bold text-black">Level 3:</span> {ausdDetails[3]}</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -523,9 +570,11 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{tour.date}</p>
                                             <h3 className="text-xl font-medium mb-4 uppercase">{tour.title}</h3>
                                             <div className="flex justify-between items-end border-t border-zinc-100 pt-4 mt-4">
-                                                <p className="text-zinc-700 text-sm font-bold">{tour.price}</p>
-                                                {/* Dezenter Schwierigkeits-Hinweis */}
-                                                <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400">Tech {getTech(tour)} · Ausd {getAusd(tour)}</p>
+                                                <p className="text-zinc-700 text-sm font-bold pb-1">{tour.price}</p>
+                                                <div className="flex flex-col gap-1.5 items-end">
+                                                    <DifficultyDots label="Technik" level={getTech(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -602,7 +651,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 <div className="relative z-[30] p-6 md:p-10">
                                     <div className="flex gap-3 items-center mb-3">
                                         <span className="bg-white text-black px-2 py-1 text-[8px] uppercase tracking-widest font-bold">{getKat(selectedTour)}</span>
-                                        <span className="text-white text-[10px] uppercase tracking-widest">{selectedTour.date}</span>
                                     </div>
                                     <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedTour.title}</h2>
                                 </div>
@@ -621,29 +669,49 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                     <div className="fade-in space-y-12">
                                         
                                         <div className="space-y-8">
-                                            {/* Schwierigkeit (Subtil und detailliert) */}
-                                            <div className="mb-12">
-                                                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Anforderungen / Level</h3>
-                                                <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
-                                                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                                        <span className="text-[9px] uppercase tracking-widest font-bold text-black w-28 flex-shrink-0 pt-0.5">Technik {getTech(selectedTour)}/3</span>
-                                                        <p>{techDetails[getTech(selectedTour)]}</p>
-                                                    </div>
-                                                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                                        <span className="text-[9px] uppercase tracking-widest font-bold text-black w-28 flex-shrink-0 pt-0.5">Ausdauer {getAusd(selectedTour)}/3</span>
-                                                        <p>{ausdDetails[getAusd(selectedTour)]}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
                                             <div>
                                                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Beschreibung</h3>
                                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
                                             </div>
                                             
+                                            {/* Neu: Alle Details (inkl. Datum & Anforderungen) als dezente Aufklappfenster */}
                                             <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
+                                                
+                                                <Accordion title="Datum & Durchführung">
+                                                    <div className="text-zinc-600 font-light text-sm pb-2">{selectedTour.date}</div>
+                                                </Accordion>
+
                                                 <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />
-                                                <Accordion title="Zusätzliche Anforderungen" content={selectedTour.anforderungen || 'Nach Absprache.'} />
+                                                
+                                                <Accordion title="Anforderungen & Level">
+                                                    <div className="pb-4 space-y-6">
+                                                        <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
+                                                            <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                                                                <div className="flex items-center gap-3 w-32 flex-shrink-0 pt-0.5">
+                                                                    <span className="text-[9px] uppercase tracking-widest font-bold text-black">Technik</span>
+                                                                    <div className="flex gap-1">
+                                                                        {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getTech(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
+                                                                    </div>
+                                                                </div>
+                                                                <p>{techDetails[getTech(selectedTour)]}</p>
+                                                            </div>
+                                                            <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                                                                <div className="flex items-center gap-3 w-32 flex-shrink-0 pt-0.5">
+                                                                    <span className="text-[9px] uppercase tracking-widest font-bold text-black">Ausdauer</span>
+                                                                    <div className="flex gap-1">
+                                                                        {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getAusd(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
+                                                                    </div>
+                                                                </div>
+                                                                <p>{ausdDetails[getAusd(selectedTour)]}</p>
+                                                            </div>
+                                                        </div>
+                                                        {selectedTour.anforderungen && (
+                                                            <div className="pt-4 border-t border-zinc-100">
+                                                                <p className="text-zinc-600 font-light text-sm whitespace-pre-line">{selectedTour.anforderungen}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </Accordion>
                                             </div>
                                             
                                             <div className="grid md:grid-cols-2 gap-6 pt-4">
