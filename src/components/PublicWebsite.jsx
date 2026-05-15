@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp } from "firebase/firestore";
-import { FileText, Tag, Filter } from 'lucide-react';
+import { FileText, Tag, Filter, Search } from 'lucide-react';
 
 // ==========================================
 // FIREBASE KONFIGURATION
@@ -75,17 +75,17 @@ const getKat = (t) => t.kategorie || (t.title.toLowerCase().includes('kurs') ? '
 const getTech = (t) => t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t.ausdauer ? Number(t.ausdauer) : 2;
 
-// --- Kleine Punkte-Anzeige für Schwierigkeit (1-3) ---
-const DifficultyDots = ({ label, level }) => (
-    <div className="flex items-center gap-2" title={`${label}: Level ${level} von 3`}>
-        <span className="text-[9px] uppercase tracking-widest text-zinc-500 w-16">{label}</span>
-        <div className="flex gap-1.5">
-            {[1, 2, 3].map(i => (
-                <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= level ? 'bg-black' : 'bg-zinc-200'}`}></div>
-            ))}
-        </div>
-    </div>
-);
+// --- Detaillierte Beschreibungen für die Schwierigkeitsgrade ---
+const techDetails = {
+    1: "Einfach – Keine besonderen technischen Vorkenntnisse nötig. Trittsicherheit auf Bergwegen reicht aus.",
+    2: "Mittel – Schwindelfreiheit erforderlich. Leichte Kletterstellen oder steileres Gelände können vorkommen.",
+    3: "Schwer – Sehr gute Klettertechnik, absolute Schwindelfreiheit und sicheres Gehen in exponiertem Gelände zwingend."
+};
+const ausdDetails = {
+    1: "Einfach – Gemütliches Tempo, Gehzeiten von bis zu 4 Stunden pro Tag mit ausreichend Pausen.",
+    2: "Mittel – Gute Grundkondition erforderlich. Gehzeiten von 4 bis 7 Stunden pro Tag.",
+    3: "Schwer – Sehr gute Kondition für lange, anstrengende Etappen mit über 7 Stunden Gehzeit pro Tag."
+};
 
 const Accordion = ({ title, content }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -379,10 +379,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             <h3 className="text-xl font-light mb-2 tracking-wide uppercase">{tour.title}</h3>
                                             <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200">
                                                 <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold">{tour.price}</p>
-                                                <div className="flex flex-col gap-1.5 items-end">
-                                                    <DifficultyDots label="Technik" level={getTech(tour)} />
-                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
-                                                </div>
+                                                {/* Dezenter Schwierigkeits-Hinweis */}
+                                                <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400">Tech {getTech(tour)} · Ausd {getAusd(tour)}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -501,7 +499,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                             </div>
                             
                             <div className="text-[10px] text-zinc-400 italic bg-zinc-50 px-4 py-2 border border-zinc-100">
-                                <b>Info:</b> 1 = Einfache Tour / Basislevel | 2 = Fortgeschritten / Mittleres Level | 3 = Schwere Tour / Hohes Level
+                                <b>Info:</b> 1 = Einfach | 2 = Mittel | 3 = Schwer
                             </div>
                         </div>
                     </div>
@@ -526,10 +524,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             <h3 className="text-xl font-medium mb-4 uppercase">{tour.title}</h3>
                                             <div className="flex justify-between items-end border-t border-zinc-100 pt-4 mt-4">
                                                 <p className="text-zinc-700 text-sm font-bold">{tour.price}</p>
-                                                <div className="flex flex-col gap-2 items-end">
-                                                    <DifficultyDots label="Technik" level={getTech(tour)} />
-                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
-                                                </div>
+                                                {/* Dezenter Schwierigkeits-Hinweis */}
+                                                <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400">Tech {getTech(tour)} · Ausd {getAusd(tour)}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -546,7 +542,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
 
-            {/* Modals für Angebote & Touren */}
+            {/* Modals für Angebote */}
             {selectedAngebot && (
                 <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
                     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedAngebot(null)}></div>
@@ -577,21 +573,29 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                NEUES, GROSSES TOUR DETAIL MODAL (SPLIT-SCREEN)
+                GROSSES TOUR DETAIL MODAL (SPLIT-SCREEN)
                ========================================= */}
             {selectedTour && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-8">
                     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedTour(null)}></div>
-                    <div className="relative bg-white w-full max-w-6xl h-full md:h-[90vh] shadow-2xl overflow-hidden fade-in flex flex-col md:flex-row">
+                    <div className="relative bg-white w-full max-w-[95vw] lg:max-w-7xl h-full md:h-[95vh] shadow-2xl overflow-hidden fade-in flex flex-col md:flex-row">
                         
                         {/* Linke Seite: Bilder */}
-                        <div className="w-full md:w-1/2 h-[35vh] md:h-full relative flex-shrink-0 cursor-pointer bg-zinc-100" onClick={() => setIsLightboxOpen(currentImageIndex)}>
+                        <div className="w-full md:w-1/2 h-[35vh] md:h-full relative flex-shrink-0 cursor-pointer bg-zinc-100 group" onClick={() => setIsLightboxOpen(currentImageIndex)}>
                             {(selectedTour.images || [selectedTour.image]).map((img, idx) => (
                                 <div key={idx} className={`absolute inset-0 transition-opacity duration-1000 ${idx === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}>
                                     <img src={img} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" alt="" />
                                 </div>
                             ))}
-                            {/* Overlay am unteren Bildrand */}
+                            
+                            {/* Hover Overlay: Macht klar, dass sich hier eine Galerie öffnet */}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-500 z-[25] flex items-center justify-center">
+                                <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
+                                    <Search size={14}/> Galerie öffnen
+                                </span>
+                            </div>
+
+                            {/* Overlay am unteren Bildrand für den Titel */}
                             <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end">
                                 <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)] pointer-events-none"></div>
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
@@ -600,7 +604,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                         <span className="bg-white text-black px-2 py-1 text-[8px] uppercase tracking-widest font-bold">{getKat(selectedTour)}</span>
                                         <span className="text-white text-[10px] uppercase tracking-widest">{selectedTour.date}</span>
                                     </div>
-                                    <h2 className="serif text-3xl md:text-5xl italic text-white leading-tight">{selectedTour.title}</h2>
+                                    <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedTour.title}</h2>
                                 </div>
                             </div>
                             {/* Close Button für Mobile auf dem Bild */}
@@ -612,26 +616,36 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                             {/* Close Button für Desktop */}
                             <button onClick={() => setSelectedTour(null)} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
                             
-                            <div className="p-6 md:p-10 lg:p-12">
-                                {/* Schwierigkeit (Header-Bereich) */}
-                                <div className="flex flex-wrap gap-8 items-center bg-[#f9f9f7] p-6 border border-zinc-100 mb-10">
-                                    <DifficultyDots label="Technik" level={getTech(selectedTour)} />
-                                    <DifficultyDots label="Ausdauer" level={getAusd(selectedTour)} />
-                                    <div className="w-full h-px bg-zinc-200 my-1"></div>
-                                    <p className="text-[9px] uppercase tracking-widest text-zinc-400 italic">1 = Einfach / 2 = Mittel / 3 = Schwer</p>
-                                </div>
-
+                            <div className="p-6 md:p-10 lg:p-16">
                                 {!isBookingMode ? (
                                     <div className="fade-in space-y-12">
+                                        
                                         <div className="space-y-8">
+                                            {/* Schwierigkeit (Subtil und detailliert) */}
+                                            <div className="mb-12">
+                                                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Anforderungen / Level</h3>
+                                                <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
+                                                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                                                        <span className="text-[9px] uppercase tracking-widest font-bold text-black w-28 flex-shrink-0 pt-0.5">Technik {getTech(selectedTour)}/3</span>
+                                                        <p>{techDetails[getTech(selectedTour)]}</p>
+                                                    </div>
+                                                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                                                        <span className="text-[9px] uppercase tracking-widest font-bold text-black w-28 flex-shrink-0 pt-0.5">Ausdauer {getAusd(selectedTour)}/3</span>
+                                                        <p>{ausdDetails[getAusd(selectedTour)]}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             <div>
                                                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Beschreibung</h3>
                                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
                                             </div>
-                                            <div className="space-y-0 mt-8">
+                                            
+                                            <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
                                                 <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />
-                                                <Accordion title="Anforderungen" content={selectedTour.anforderungen || 'Nach Absprache.'} />
+                                                <Accordion title="Zusätzliche Anforderungen" content={selectedTour.anforderungen || 'Nach Absprache.'} />
                                             </div>
+                                            
                                             <div className="grid md:grid-cols-2 gap-6 pt-4">
                                                 <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
                                                     <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-3">Material</p>
@@ -645,6 +659,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 </div>
                                             </div>
                                         </div>
+                                        
                                         <button onClick={() => setIsBookingMode(true)} disabled={selectedTour.maxPlaetze <= selectedTour.angemeldet} className={`w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all ${selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800 shadow-xl'}`}>
                                             {selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'Ausgebucht' : 'Verbindlich Anmelden'}
                                         </button>
