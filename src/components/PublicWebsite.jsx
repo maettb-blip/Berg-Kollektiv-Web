@@ -19,6 +19,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const loadEmailJS = () => new Promise((resolve, reject) => {
+    if (window.emailjs) return resolve(window.emailjs);
+    const script = document.createElement('script');
+    script.src = "https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js";
+    script.onload = () => {
+        window.emailjs.init("tr07IrpBTKjp_Isq6");
+        resolve(window.emailjs);
+    };
+    script.onerror = reject;
+    document.head.appendChild(script);
+});
+
 const Instagram = (props) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
 );
@@ -226,13 +238,11 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
         try {
             await addDoc(collection(db, 'anfragen'), data);
-            if (window.emailjs) {
-                await window.emailjs.send(
-                    "service_b02rsz7", "template_ewn7qhm", 
-                    { vorname: data.vorname, name: data.name, email: data.email, thema: data.thema, nachricht: data.nachricht }, 
-                    "tr07IrpBTKjp_Isq6"
-                );
-            }
+            const emailjs = await loadEmailJS();
+            await emailjs.send(
+                "service_b02rsz7", "template_ewn7qhm", 
+                { vorname: data.vorname, name: data.name, email: data.email, thema: data.thema, nachricht: data.nachricht }
+            );
             setBookingStatus("Anfrage erfolgreich gesendet! Wir melden uns bald.");
             setTimeout(() => { setSelectedAngebot(null); setBookingStatus(null); }, 3000);
         } catch (err) { alert("Fehler beim Senden der Anfrage. Bitte versuche es später erneut."); }
@@ -253,20 +263,18 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
         try {
             await addDoc(collection(db, 'anfragen'), data);
-            if (window.emailjs) {
-                // Info ans Team
-                await window.emailjs.send(
-                    "service_b02rsz7", "template_ewn7qhm", 
-                    { vorname: data.vorname, name: data.name, email: data.email, thema: data.thema, nachricht: data.nachricht }, 
-                    "tr07IrpBTKjp_Isq6"
-                );
-                // Buchungs-Bestätigungsmail an den Kunden (für Beispieltouren zweckentfremdet)
-                await window.emailjs.send(
-                    "service_b02rsz7", "template_1uovyru", 
-                    { vorname: data.vorname, name: data.name, email: data.email, tour_title: `Anfrage: ${selectedTour.title}`, tour_date: "Auf Anfrage", price: "Nach Absprache" }, 
-                    "tr07IrpBTKjp_Isq6"
-                );
-            }
+            const emailjs = await loadEmailJS();
+            // Info ans Team
+            await emailjs.send(
+                "service_b02rsz7", "template_ewn7qhm", 
+                { vorname: data.vorname, name: data.name, email: data.email, thema: data.thema, nachricht: data.nachricht }
+            );
+            // Buchungs-Bestätigungsmail an den Kunden (für Beispieltouren zweckentfremdet)
+            await emailjs.send(
+                "service_b02rsz7", "template_1uovyru", 
+                { vorname: data.vorname, name: data.name, email: data.email, tour_title: `Anfrage: ${selectedTour.title}`, tour_date: "Auf Anfrage", price: "Nach Absprache" }
+            );
+            
             setBookingStatus("Anfrage erfolgreich gesendet! Eine Bestätigung ist zu dir unterwegs.");
             setTimeout(() => { setSelectedTour(null); setIsInquiryMode(false); setBookingStatus(null); setIsSubmitting(false); }, 4000);
         } catch (err) { 
@@ -296,13 +304,12 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             if (!selectedTour.id.startsWith('mock-')) {
                 await addDoc(collection(db, 'anmeldungen'), data);
                 await updateDoc(doc(db, 'touren', selectedTour.id), { angemeldet: increment(1) });
-                if (window.emailjs) {
-                    await window.emailjs.send(
-                        "service_b02rsz7", "template_1uovyru", 
-                        { vorname: data.vorname, name: data.name, email: data.email, tour_title: data.tourTitle, tour_date: selectedTour.date, price: selectedTour.price }, 
-                        "tr07IrpBTKjp_Isq6"
-                    );
-                }
+                
+                const emailjs = await loadEmailJS();
+                await emailjs.send(
+                    "service_b02rsz7", "template_1uovyru", 
+                    { vorname: data.vorname, name: data.name, email: data.email, tour_title: data.tourTitle, tour_date: selectedTour.date, price: selectedTour.price }
+                );
             }
             setBookingStatus("Herzlichen Dank! Die Bestätigung deiner Anmeldung ist zu dir unterwegs.");
             setTimeout(() => { setSelectedTour(null); setIsBookingMode(false); setBookingStatus(null); setIsSubmitting(false); }, 4000);
@@ -919,6 +926,43 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
             
+            {/* Team Member Modal (Steckbrief) */}
+            {selectedTeamMember && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 md:p-12 fade-in">
+                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedTeamMember(null)}></div>
+                    <div className="relative bg-white w-full max-w-4xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
+                        <div className="w-full md:w-5/12 h-[55vh] md:h-auto relative flex-shrink-0">
+                            <img src={selectedTeamMember.image} className="w-full h-full object-cover" alt={selectedTeamMember.name} />
+                            <button onClick={() => setSelectedTeamMember(null)} className="absolute top-4 right-4 text-white text-3xl z-10 md:hidden">&times;</button>
+                        </div>
+                        <div className="w-full md:w-7/12 p-8 md:p-12 bg-[#f9f9f7] overflow-y-auto relative">
+                            <button onClick={() => setSelectedTeamMember(null)} className="hidden md:block absolute top-6 right-8 text-zinc-400 hover:text-black text-4xl transition-colors">&times;</button>
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{selectedTeamMember.title}</p>
+                            <h2 className="serif text-3xl md:text-4xl italic mb-6">{selectedTeamMember.name}</h2>
+                            <p className="text-sm text-zinc-600 font-light leading-relaxed mb-8">{selectedTeamMember.desc}</p>
+                            <div className="space-y-6 border-t border-zinc-200 pt-8">
+                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Superkraft</span>
+                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.superkraft}</span>
+                                </div>
+                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Kryptonit</span>
+                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.schwaeche}</span>
+                                </div>
+                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Touren-Snack</span>
+                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.snack}</span>
+                                </div>
+                                <div className="grid grid-cols-12 gap-4">
+                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Lebensmotto</span>
+                                    <span className="col-span-12 md:col-span-8 text-xs italic text-zinc-700 leading-relaxed">"{selectedTeamMember.zitat}"</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Vollbild Lightbox mit Touch/Swipe */}
             {isLightboxOpen !== null && selectedTour && (
                 <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center fade-in">
