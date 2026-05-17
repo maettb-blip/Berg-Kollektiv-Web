@@ -248,7 +248,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         } catch (err) { alert("Fehler beim Senden der Anfrage. Bitte versuche es später erneut."); }
     };
 
-    // Anfrage für Beispieltouren (Ideenpool) inkl. Bestätigungsmail an Kunden
+    // Anfrage für Beispieltouren (Ideenpool)
     const handleIdeaInquiry = async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
@@ -264,18 +264,14 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         try {
             await addDoc(collection(db, 'anfragen'), data);
             const emailjs = await loadEmailJS();
-            // Info ans Team
+            
+            // Nur das normale Anfrage-E-Mail senden (keine zweckentfremdete Anmeldebestätigung)
             await emailjs.send(
                 "service_b02rsz7", "template_ewn7qhm", 
                 { vorname: data.vorname, name: data.name, email: data.email, thema: data.thema, nachricht: data.nachricht }
             );
-            // Buchungs-Bestätigungsmail an den Kunden (für Beispieltouren zweckentfremdet)
-            await emailjs.send(
-                "service_b02rsz7", "template_1uovyru", 
-                { vorname: data.vorname, name: data.name, email: data.email, tour_title: `Anfrage: ${selectedTour.title}`, tour_date: "Auf Anfrage", price: "Nach Absprache" }
-            );
             
-            setBookingStatus("Anfrage erfolgreich gesendet! Eine Bestätigung ist zu dir unterwegs.");
+            setBookingStatus("Anfrage erfolgreich gesendet! Wir melden uns bald bei dir.");
             setTimeout(() => { setSelectedTour(null); setIsInquiryMode(false); setBookingStatus(null); setIsSubmitting(false); }, 4000);
         } catch (err) { 
             setBookingStatus("Fehler beim Senden der Anfrage. Bitte später erneut versuchen."); 
