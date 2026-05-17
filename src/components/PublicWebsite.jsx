@@ -70,12 +70,10 @@ const ANGEBOT_WINTER = [
     { id: "w4", title: "Lawinenkurse", desc: "Fundiertes Wissen für deine Sicherheit im Backcountry.", image: "/lawine.jpg", longDesc: "Prävention, Beobachtung und Rettung. Ein essenzieller Kurs für alle, die sich im Winter abseits der Pisten bewegen." }
 ];
 
-// --- Hilfsfunktionen für Fallbacks bei alten Tourendaten ---
 const getKat = (t) => t.kategorie || (t.title.toLowerCase().includes('kurs') ? 'Kurse' : t.title.toLowerCase().includes('ski') ? 'Skitour' : t.title.toLowerCase().includes('klett') ? 'Klettern' : 'Hochtour');
 const getTech = (t) => t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t.ausdauer ? Number(t.ausdauer) : 2;
 
-// --- Detaillierte Beschreibungen für die Schwierigkeitsgrade ---
 const techDetails = {
     1: "Einfach – Keine besonderen technischen Vorkenntnisse nötig. Trittsicherheit auf Bergwegen reicht aus.",
     2: "Mittel – Schwindelfreiheit erforderlich. Leichte Kletterstellen oder steileres Gelände können vorkommen.",
@@ -87,7 +85,6 @@ const ausdDetails = {
     3: "Schwer – Sehr gute Kondition für lange, anstrengende Etappen mit über 7 Stunden Gehzeit pro Tag."
 };
 
-// --- Kleine Punkte-Anzeige für Schwierigkeit (1-3) ---
 const DifficultyDots = ({ label, level, info }) => (
     <div className="flex items-center gap-2 relative group/tooltip" title={info}>
         <span className="text-[9px] uppercase tracking-widest text-zinc-500 w-16">{label}</span>
@@ -100,7 +97,6 @@ const DifficultyDots = ({ label, level, info }) => (
     </div>
 );
 
-// --- Modifiziertes Accordion (unterstützt nun content ODER children) ---
 const Accordion = ({ title, content, children }) => {
     const [isOpen, setIsOpen] = useState(false);
     if (!content && !children) return null;
@@ -125,29 +121,21 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [selectedTour, setSelectedTour] = useState(null);
     const [selectedTeamMember, setSelectedTeamMember] = useState(null);
     const [isBookingMode, setIsBookingMode] = useState(false);
-    const [isInquiryMode, setIsInquiryMode] = useState(false); // Für Beispieltouren-Anfragen
+    const [isInquiryMode, setIsInquiryMode] = useState(false);
     const [isLightboxOpen, setIsLightboxOpen] = useState(null);
     const [bookingStatus, setBookingStatus] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // --- All Tours Modal & Filter States ---
     const [isAllToursModalOpen, setIsAllToursModalOpen] = useState(false);
-    const [isIdeenBoardOpen, setIsIdeenBoardOpen] = useState(false); // NEU: Ideen Board
+    const [isIdeenBoardOpen, setIsIdeenBoardOpen] = useState(false);
     const [filterKategorie, setFilterKategorie] = useState('Alle');
     const [filterTechnik, setFilterTechnik] = useState('Alle');
     const [filterAusdauer, setFilterAusdauer] = useState('Alle');
     const [showLevelInfo, setShowLevelInfo] = useState(false);
 
-    // --- Ladezustand für das Video ---
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
-    
-    // --- Touch & Scroll States für Galerie ---
-    const [touchStart, setTouchStart] = useState(null);
-    const [touchEnd, setTouchEnd] = useState(null);
     const [hasScrolledGallery, setHasScrolledGallery] = useState(false);
-    const minSwipeDistance = 50;
 
-    // Aufteilung in reale Touren und Beispieltouren
     const visibleTours = touren.filter(t => t.visible !== false && t.isExample !== true);
     const exampleTours = touren.filter(t => t.isExample === true);
     const recentTours = visibleTours.slice(0, 3);
@@ -159,7 +147,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         return true;
     });
     
-    // Filter für Beispieltouren
     const filteredExampleTours = exampleTours.filter(t => {
         if (filterKategorie !== 'Alle' && getKat(t) !== filterKategorie) return false;
         return true;
@@ -171,12 +158,10 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Reset Gallery Scroll Hint when opening a new tour
     useEffect(() => {
         if (selectedTour) setHasScrolledGallery(false);
     }, [selectedTour]);
 
-    // --- Observer für Mobile Scroll "Hover" Effekte ---
     useEffect(() => {
         if (window.matchMedia("(hover: hover)").matches) return;
 
@@ -202,7 +187,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         return () => observer.disconnect();
     }, [touren, angebotTab, isAllToursModalOpen, isIdeenBoardOpen]);
 
-    // Tastatur-Navigation in der Lightbox
+    // Tastatur-Navigation in der Desktop Lightbox
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (isLightboxOpen === null || !selectedTour) return;
@@ -216,35 +201,22 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isLightboxOpen, selectedTour]);
 
-    // --- Touch Swipe Handler für Lightbox ---
-    const onTouchStart = (e) => {
-        setTouchEnd(null);
-        setTouchStart(e.targetTouches[0].clientX);
-    };
-    
-    const onTouchMove = (e) => {
-        setTouchEnd(e.targetTouches[0].clientX);
-    };
-    
-    const onTouchEndHandler = () => {
-        if (!touchStart || !touchEnd) return;
-        const distance = touchStart - touchEnd;
-        const isLeftSwipe = distance > minSwipeDistance;
-        const isRightSwipe = distance < -minSwipeDistance;
-        
-        const imgs = selectedTour?.images || [selectedTour?.image];
-        if (!imgs || imgs.length <= 1) return;
+    // Automatisches Scrollen im Mobile-Galeriemodus zur angeklickten Bild-ID
+    useEffect(() => {
+        if (isLightboxOpen !== null && window.innerWidth < 768) {
+            setHasScrolledGallery(false);
+            setTimeout(() => {
+                const el = document.getElementById(`gallery-img-${isLightboxOpen}`);
+                if (el) el.scrollIntoView({ behavior: 'instant', inline: 'center' });
+            }, 50);
+        }
+    }, [isLightboxOpen]);
 
-        if (isLeftSwipe) setIsLightboxOpen((prev) => (prev + 1) % imgs.length);
-        else if (isRightSwipe) setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length);
-    };
-
+    // Allgemeine Anfrage (Angebote)
     const handleAnfrage = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        
-        // Entweder kommt das Thema aus dem selektierten Angebot, oder aus einer Idee (selectedTour)
-        const thema = selectedAngebot ? selectedAngebot.title : (selectedTour ? `Idee: ${selectedTour.title}` : 'Allgemeine Anfrage');
+        const thema = selectedAngebot ? selectedAngebot.title : 'Allgemeine Anfrage';
         
         const data = {
             thema: thema,
@@ -262,10 +234,48 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 );
             }
             setBookingStatus("Anfrage erfolgreich gesendet! Wir melden uns bald.");
-            setTimeout(() => { setSelectedAngebot(null); setIsInquiryMode(false); setBookingStatus(null); if(selectedTour && selectedTour.isExample) setSelectedTour(null); }, 3000);
+            setTimeout(() => { setSelectedAngebot(null); setBookingStatus(null); }, 3000);
         } catch (err) { alert("Fehler beim Senden der Anfrage. Bitte versuche es später erneut."); }
     };
 
+    // Anfrage für Beispieltouren (Ideenpool) inkl. Bestätigungsmail an Kunden
+    const handleIdeaInquiry = async (e) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        const fd = new FormData(e.target);
+        
+        const data = {
+            thema: `Idee: ${selectedTour.title}`,
+            vorname: fd.get('vorname'), name: fd.get('name'), email: fd.get('email'),
+            nachricht: fd.get('nachricht'), timestamp: serverTimestamp()
+        };
+
+        try {
+            await addDoc(collection(db, 'anfragen'), data);
+            if (window.emailjs) {
+                // Info ans Team
+                await window.emailjs.send(
+                    "service_b02rsz7", "template_ewn7qhm", 
+                    { vorname: data.vorname, name: data.name, email: data.email, thema: data.thema, nachricht: data.nachricht }, 
+                    "tr07IrpBTKjp_Isq6"
+                );
+                // Buchungs-Bestätigungsmail an den Kunden (für Beispieltouren zweckentfremdet)
+                await window.emailjs.send(
+                    "service_b02rsz7", "template_1uovyru", 
+                    { vorname: data.vorname, name: data.name, email: data.email, tour_title: `Anfrage: ${selectedTour.title}`, tour_date: "Auf Anfrage", price: "Nach Absprache" }, 
+                    "tr07IrpBTKjp_Isq6"
+                );
+            }
+            setBookingStatus("Anfrage erfolgreich gesendet! Eine Bestätigung ist zu dir unterwegs.");
+            setTimeout(() => { setSelectedTour(null); setIsInquiryMode(false); setBookingStatus(null); setIsSubmitting(false); }, 4000);
+        } catch (err) { 
+            setBookingStatus("Fehler beim Senden der Anfrage. Bitte später erneut versuchen."); 
+            setIsSubmitting(false); 
+        }
+    };
+
+    // Normale Tourenbuchung
     const handleBooking = async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
@@ -617,7 +627,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                NEU: MODAL IDEEN-BOARD (Beispieltouren)
+                MODAL IDEEN-BOARD (Beispieltouren)
                ========================================= */}
             {isIdeenBoardOpen && (
                 <div className="fixed inset-0 z-[150] flex flex-col bg-[#f9f9f7] overflow-y-auto fade-in">
@@ -684,7 +694,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 <div className="space-y-10 flex-1 flex flex-col">
                                     <p className="text-zinc-600 text-sm leading-relaxed font-light">{selectedAngebot.longDesc}</p>
                                     
-                                    {/* NEU: Ideen Button Section */}
                                     <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
                                         <h3 className="serif text-2xl italic mb-3">Benötigst du Ideen?</h3>
                                         <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
@@ -715,52 +724,36 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                GROSSES TOUR DETAIL MODAL (Für normale Touren & Ideen)
-                Mobile Scroll & Layout angepasst
+                GROSSES TOUR DETAIL MODAL
                ========================================= */}
             {selectedTour && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
                     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedTour(null)}></div>
                     
-                    {/* WICHTIG: Mobile overflow-y-auto (scrollt als Ganzes), Desktop overflow-hidden (Split-Screen) */}
                     <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
                         
-                        {/* Linke Seite: Bilder */}
-                        {/* WICHTIG: Mobile sticky oder fließend (hier fließend, scrollt mit rauf), Desktop fixiert */}
                         <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
                             
-                            <div 
-                                className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth"
-                                onScroll={() => setHasScrolledGallery(true)}
-                            >
-                                {(selectedTour.images || [selectedTour.image]).map((img, idx, arr) => (
+                            {/* Main Detail Image Slider (100% breite, kein Wisch-Hinweis) */}
+                            <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth">
+                                {(selectedTour.images || [selectedTour.image]).map((img, idx) => (
                                     <div 
                                         key={idx} 
                                         onClick={() => setIsLightboxOpen(idx)}
-                                        className={`relative h-full flex-shrink-0 snap-start cursor-pointer ${arr.length > 1 ? 'w-[85%] md:w-full pr-1 md:pr-0' : 'w-full'}`} 
+                                        className="relative w-full h-full flex-shrink-0 snap-start cursor-pointer" 
                                     >
                                         <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
                                     </div>
                                 ))}
                             </div>
                             
-                            {/* Hover Overlay Desktop: Galerie öffnen */}
+                            {/* Hover Overlay Desktop */}
                             <div className="hidden md:flex absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none items-center justify-center">
                                 <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
                                     <Search size={14}/> Galerie öffnen
                                 </span>
                             </div>
 
-                            {/* Mobile Swipe Hint (Verschwindet beim Scrollen) */}
-                            {(!hasScrolledGallery && (selectedTour.images || [selectedTour.image]).length > 1) && (
-                                <div className="md:hidden absolute inset-0 z-[25] flex items-center justify-end pr-8 pointer-events-none">
-                                    <div className="bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 animate-swipe-hint">
-                                        <Hand size={14}/> Wischen
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Overlay am unteren Bildrand für den Titel */}
                             <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end pointer-events-none">
                                 <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)]"></div>
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
@@ -772,14 +765,10 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                     <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedTour.title}</h2>
                                 </div>
                             </div>
-                            {/* Close Button Mobile (fixed im Viewport) */}
                             <button onClick={(e) => { e.stopPropagation(); setSelectedTour(null); setIsInquiryMode(false); }} className="md:hidden fixed top-4 right-4 text-white text-3xl z-[60] bg-black/40 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
                         </div>
                         
-                        {/* Rechte Seite: Inhalt */}
-                        {/* WICHTIG: Mobile h-auto (passt sich an Inhalt an), Desktop overflow-y-auto */}
                         <div className="w-full md:w-1/2 h-auto md:h-full md:overflow-y-auto bg-white relative z-10 flex flex-col">
-                            {/* Close Button Desktop */}
                             <button onClick={() => { setSelectedTour(null); setIsInquiryMode(false); }} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
                             
                             <div className="p-6 md:p-10 lg:p-16 flex-1 flex flex-col">
@@ -792,17 +781,13 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
                                             </div>
                                             
-                                            {/* Details & Accordions */}
                                             <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
-                                                
-                                                {/* Datum nur zeigen, wenn es keine Idee ist, oder wenn eines explizit gesetzt wurde */}
                                                 {(!selectedTour.isExample || selectedTour.date) && (
                                                     <Accordion title="Datum & Durchführung">
                                                         <div className="text-zinc-600 font-light text-sm pb-2">{selectedTour.date || 'Auf Anfrage'}</div>
                                                     </Accordion>
                                                 )}
 
-                                                {/* Ablauf nur bei normalen Touren */}
                                                 {!selectedTour.isExample && <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />}
                                                 
                                                 <Accordion title="Anforderungen & Level">
@@ -836,7 +821,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 </Accordion>
                                             </div>
                                             
-                                            {/* Preis & Material nur für normale Touren */}
                                             {!selectedTour.isExample && (
                                                 <div className="grid md:grid-cols-2 gap-6 pt-4">
                                                     <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
@@ -853,7 +837,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             )}
                                         </div>
                                         
-                                        {/* Button Logik: Buchen vs Anfrage */}
                                         {selectedTour.isExample ? (
                                             <button onClick={() => setIsInquiryMode(true)} className="mt-8 w-full py-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all bg-black text-white hover:bg-zinc-800 shadow-xl">
                                                 Interesse wecken / Unverbindlich anfragen
@@ -869,9 +852,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                         {bookingStatus ? (
                                             <div className="text-center space-y-8 py-20"><div className="text-4xl">✓</div><p className="serif text-2xl italic">{bookingStatus}</p><button onClick={() => { setSelectedTour(null); setIsBookingMode(false); setIsInquiryMode(false); }} className="text-[10px] uppercase tracking-widest border-b border-black pb-1">Zurück</button></div>
                                         ) : (
-                                            /* Anzeige Formular Buchen vs Anfrage */
                                             isInquiryMode ? (
-                                                <form onSubmit={handleAnfrage} className="space-y-8">
+                                                <form onSubmit={handleIdeaInquiry} className="space-y-8">
                                                     <div className="flex justify-between items-end mb-10"><h3 className="serif text-3xl italic">Unverbindliche Anfrage</h3><button type="button" onClick={() => setIsInquiryMode(false)} className="text-[10px] uppercase tracking-widest opacity-40 hover:opacity-100 transition">Abbrechen</button></div>
                                                     <p className="text-xs text-zinc-500 mb-6">Wir freuen uns über dein Interesse an der Tour-Idee "{selectedTour.title}". Lass uns wissen, wann du Zeit hast und wir schauen die Details gemeinsam an.</p>
                                                     <div className="grid grid-cols-2 gap-8">
@@ -937,81 +919,56 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
             
-            {/* Team Member Modal (Steckbrief) */}
-            {selectedTeamMember && (
-                <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 md:p-12 fade-in">
-                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedTeamMember(null)}></div>
-                    <div className="relative bg-white w-full max-w-4xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
-                        {/* Höhe hier für Mobile auf Hochformat angepasst und grayscale entfernt */}
-                        <div className="w-full md:w-5/12 h-[55vh] md:h-auto relative flex-shrink-0">
-                            <img src={selectedTeamMember.image} className="w-full h-full object-cover" alt={selectedTeamMember.name} />
-                            <button onClick={() => setSelectedTeamMember(null)} className="absolute top-4 right-4 text-white text-3xl z-10 md:hidden">&times;</button>
-                        </div>
-                        <div className="w-full md:w-7/12 p-8 md:p-12 bg-[#f9f9f7] overflow-y-auto relative">
-                            <button onClick={() => setSelectedTeamMember(null)} className="hidden md:block absolute top-6 right-8 text-zinc-400 hover:text-black text-4xl transition-colors">&times;</button>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{selectedTeamMember.title}</p>
-                            <h2 className="serif text-3xl md:text-4xl italic mb-6">{selectedTeamMember.name}</h2>
-                            <p className="text-sm text-zinc-600 font-light leading-relaxed mb-8">{selectedTeamMember.desc}</p>
-                            <div className="space-y-6 border-t border-zinc-200 pt-8">
-                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Superkraft</span>
-                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.superkraft}</span>
-                                </div>
-                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Kryptonit</span>
-                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.schwaeche}</span>
-                                </div>
-                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Touren-Snack</span>
-                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.snack}</span>
-                                </div>
-                                <div className="grid grid-cols-12 gap-4">
-                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Lebensmotto</span>
-                                    <span className="col-span-12 md:col-span-8 text-xs italic text-zinc-700 leading-relaxed">"{selectedTeamMember.zitat}"</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Vollbild Lightbox mit Touch/Swipe */}
             {isLightboxOpen !== null && selectedTour && (
-                <div 
-                    className="fixed inset-0 z-[300] bg-black flex items-center justify-center p-4 md:p-12 fade-in"
-                    onTouchStart={onTouchStart}
-                    onTouchMove={onTouchMove}
-                    onTouchEnd={onTouchEndHandler}
-                >
+                <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center fade-in">
                     <div className="absolute inset-0" onClick={() => setIsLightboxOpen(null)}></div>
-                    <button onClick={() => setIsLightboxOpen(null)} className="absolute top-8 right-8 text-white text-5xl z-[310] p-4">&times;</button>
+                    <button onClick={() => setIsLightboxOpen(null)} className="absolute top-4 right-4 md:top-8 md:right-8 text-white text-4xl md:text-5xl z-[350] w-12 h-12 flex items-center justify-center bg-black/40 rounded-full md:bg-transparent md:w-auto md:h-auto">&times;</button>
+                    
+                    {/* --- MOBILE GALLERY (Native Scroll) --- */}
+                    <div className="md:hidden absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar items-center z-[310]" onScroll={() => setHasScrolledGallery(true)}>
+                        {(!hasScrolledGallery && (selectedTour.images || [selectedTour.image]).length > 1) && (
+                            <div className="absolute inset-0 z-[350] flex items-center justify-center pointer-events-none">
+                                <div className="bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full text-xs uppercase tracking-widest flex items-center gap-3 animate-swipe-hint">
+                                    <Hand size={18}/> Bilder wischen
+                                </div>
+                            </div>
+                        )}
+                        {(selectedTour.images || [selectedTour.image]).map((img, idx, arr) => (
+                            <div key={idx} id={`gallery-img-${idx}`} className={`relative h-auto max-h-[85vh] flex-shrink-0 snap-center flex items-center justify-center ${arr.length > 1 ? 'w-[85%] px-2' : 'w-full'}`}>
+                                <img src={img} loading="lazy" decoding="async" className="max-w-full max-h-[85vh] object-contain shadow-2xl pointer-events-none" alt="" />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* --- DESKTOP GALLERY (Arrows) --- */}
                     {(() => {
                         const imgs = selectedTour.images || [selectedTour.image];
-                        if (imgs.length <= 1) return null;
+                        if (imgs.length <= 1) return (
+                            <div className="hidden md:flex relative max-w-full max-h-full items-center justify-center z-[310] p-12 pointer-events-none">
+                                <img src={imgs[0]} className="max-w-full max-h-full object-contain shadow-2xl" alt="" />
+                            </div>
+                        );
                         return (
-                            <>
+                            <div className="hidden md:flex absolute inset-0 items-center justify-center z-[310]">
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }} 
-                                    className="absolute left-0 md:left-8 top-1/2 -translate-y-1/2 text-white text-5xl md:text-6xl z-[310] p-6 md:p-8"
-                                >
-                                    &#8249;
-                                </button>
+                                    className="absolute left-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[320]"
+                                >&#8249;</button>
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }} 
-                                    className="absolute right-0 md:right-8 top-1/2 -translate-y-1/2 text-white text-5xl md:text-6xl z-[310] p-6 md:p-8"
-                                >
-                                    &#8250;
-                                </button>
-                            </>
+                                    className="absolute right-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[320]"
+                                >&#8250;</button>
+                                <img 
+                                    src={imgs[isLightboxOpen]} 
+                                    loading="lazy" 
+                                    decoding="async" 
+                                    className="max-w-full max-h-[90vh] object-contain shadow-2xl transition-all duration-500 pointer-events-none px-24" 
+                                    alt="" 
+                                />
+                            </div>
                         );
                     })()}
-                    <img 
-                        src={(selectedTour.images || [selectedTour.image])[isLightboxOpen]} 
-                        loading="lazy" 
-                        decoding="async" 
-                        className="relative max-w-full max-h-full object-contain z-[310] shadow-2xl transition-all duration-500 pointer-events-none" 
-                        alt="" 
-                    />
                 </div>
             )}
         </div>
