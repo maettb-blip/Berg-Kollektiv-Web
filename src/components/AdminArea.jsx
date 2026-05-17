@@ -773,7 +773,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                         <button onClick={() => setEditingTour({ title: '', visible: true, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', kategorie: 'Hochtour', technik: 2, ausdauer: 2 })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
                     </div>
 
-                    {/* FILTER BEREICH (nur anzeigen, wenn man gerade keine Tour bearbeitet) */}
+                    {/* FILTER BEREICH */}
                     {!editingTour && (
                         <div className="flex flex-col gap-4 mb-8 bg-zinc-50 p-4 md:p-6 border border-zinc-200">
                             <div className="flex flex-wrap gap-4 border-b border-zinc-200 pb-4">
@@ -862,7 +862,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 </div>
                             </div>
 
-                            {/* NEU: Dropdowns für Kategorien & Filter */}
                             <div className="grid md:grid-cols-3 gap-6 pt-6 border-t border-zinc-200">
                                 <div>
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Hauptkategorie</label>
@@ -912,7 +911,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                     ) : (
                         <div className="space-y-4 fade-in">
                             {touren.filter(t => {
-                                // Filter Logik anwenden
                                 const isVisible = t.visible !== false;
                                 if (tourStatusFilter === 'Öffentlich' && !isVisible) return false;
                                 if (tourStatusFilter === 'Versteckt' && isVisible) return false;
@@ -950,6 +948,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
+            {/* NEU: Anmeldungen komplett ohne horizontales Scrollen optimiert */}
             {adminSubView === 'anmeldungen' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
@@ -958,35 +957,45 @@ export default function AdminArea({ user, touren, onLogout }) {
                     </div>
                     <div className="space-y-16">
                         {Object.entries(anmeldungen.reduce((acc, anm) => { const k = anm.tourTitle; if(!acc[k]) acc[k]=[]; acc[k].push(anm); return acc; }, {})).map(([title, teilnehmer]) => (
-                            <div key={title} className="bg-white border border-zinc-200 p-5 md:p-8 shadow-sm w-full">
-                                <h4 className="text-lg font-bold uppercase tracking-widest mb-6 border-b border-zinc-200 pb-4">{title} <span className="text-zinc-400 font-normal ml-2">({teilnehmer.length} gebucht)</span></h4>
-                                <div className="overflow-x-auto w-full">
-                                    <table className="w-full text-left text-xs min-w-[600px]">
-                                        <thead className="bg-zinc-50 border-y border-zinc-200 text-zinc-500 uppercase tracking-widest font-bold">
-                                            <tr><th className="p-4">Name & Adresse</th><th className="p-4">Kontakt</th><th className="p-4">Infos & Ernährung</th><th className="p-4 text-right">Aktion</th></tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-100">
-                                            {teilnehmer.map(a => (
-                                                <tr key={a.id} className="hover:bg-zinc-50 transition">
-                                                    <td className="p-4">
-                                                        <span className="font-bold text-sm uppercase tracking-widest block mb-1">{a.vorname} {a.name}</span>
-                                                        <span className="text-zinc-500">{a.adresse}<br/>{a.plz_ort}</span>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <a href={`mailto:${a.email}`} className="text-blue-600 hover:underline block mb-1 break-all">{a.email}</a>
-                                                        <span className="text-zinc-600">{a.phone}</span>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        {a.ernaehrung && <p className="text-orange-600 font-bold mb-1">Essen: {a.ernaehrung}</p>}
-                                                        {a.besonderes && <p className="text-zinc-600 italic">"{a.besonderes}"</p>}
-                                                    </td>
-                                                    <td className="p-4 text-right">
-                                                        <button onClick={() => { if(confirm('Buchung wirklich löschen?')) { deleteDoc(doc(db,'anmeldungen',a.id)); logAction(`Anmeldung storniert: ${a.vorname} ${a.name} für ${title}`); } }} className="text-[10px] uppercase tracking-widest font-bold text-red-400 hover:text-red-600 transition">Stornieren</button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                            <div key={title} className="bg-white border border-zinc-200 shadow-sm w-full">
+                                <div className="p-5 md:p-6 bg-white border-b border-zinc-200">
+                                    <h4 className="text-base md:text-lg font-bold uppercase tracking-widest leading-relaxed">
+                                        {title} <span className="text-zinc-400 font-normal ml-2 block md:inline mt-1 md:mt-0">({teilnehmer.length} gebucht)</span>
+                                    </h4>
+                                </div>
+                                
+                                {/* Grid-basierte "Tabelle" - bricht auf Handys schön um */}
+                                <div className="w-full">
+                                    <div className="hidden md:grid grid-cols-12 gap-4 bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-widest font-bold text-[10px] p-5">
+                                        <div className="col-span-4">Name & Adresse</div>
+                                        <div className="col-span-3">Kontakt</div>
+                                        <div className="col-span-3">Infos & Ernährung</div>
+                                        <div className="col-span-2 text-right">Aktion</div>
+                                    </div>
+                                    <div className="divide-y divide-zinc-100">
+                                        {teilnehmer.map(a => (
+                                            <div key={a.id} className="flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 p-5 hover:bg-zinc-50 transition">
+                                                <div className="col-span-4">
+                                                    <span className="font-bold text-sm uppercase tracking-widest block mb-1">{a.vorname} {a.name}</span>
+                                                    <span className="text-zinc-500 text-xs leading-relaxed">{a.adresse}<br/>{a.plz_ort}</span>
+                                                </div>
+                                                <div className="col-span-3">
+                                                    <a href={`mailto:${a.email}`} className="text-blue-600 hover:underline block mb-1 break-all text-xs">{a.email}</a>
+                                                    <span className="text-zinc-600 text-xs">{a.phone}</span>
+                                                </div>
+                                                <div className="col-span-3">
+                                                    {a.ernaehrung && <p className="text-orange-600 font-bold mb-1 text-[10px] uppercase tracking-widest">Essen: {a.ernaehrung}</p>}
+                                                    {a.besonderes && <p className="text-zinc-600 italic text-xs leading-relaxed">"{a.besonderes}"</p>}
+                                                    {!a.ernaehrung && !a.besonderes && <p className="text-zinc-400 text-xs italic hidden md:block">Keine Anmerkungen</p>}
+                                                </div>
+                                                <div className="col-span-2 flex items-center md:justify-end mt-3 md:mt-0 pt-4 md:pt-0 border-t md:border-transparent border-zinc-100">
+                                                    <button onClick={() => { if(confirm('Buchung wirklich löschen?')) { deleteDoc(doc(db,'anmeldungen',a.id)); logAction(`Anmeldung storniert: ${a.vorname} ${a.name} für ${title}`); } }} className="text-[10px] uppercase tracking-widest font-bold text-red-500 md:text-red-400 hover:text-red-600 transition border border-red-200 md:border-transparent px-4 py-2 md:p-0 rounded-sm md:rounded-none w-full md:w-auto bg-red-50 md:bg-transparent">
+                                                        Stornieren
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -995,7 +1004,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
-            {/* AUFGABEN (KANBAN) */}
+            {/* AUFGABEN (KANBAN) - Für Mobile vertikal gestapelt */}
             {adminSubView === 'aufgaben' && (
                 <div className="fade-in flex flex-col h-full w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -1008,9 +1017,10 @@ export default function AdminArea({ user, touren, onLogout }) {
                     <div className="flex flex-wrap gap-2 mb-8 border-b border-zinc-100 pb-4 w-full">
                         {['Alle', ...taskKategorien].map(c => <button key={c} onClick={() => setTaskFilter(c)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${taskFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
                     </div>
-                    <div className="flex gap-4 md:gap-8 overflow-x-auto pb-6 items-start w-full snap-x snap-mandatory">
+                    {/* flex-col für Mobile, overflow-x-auto nur ab md Breakpoint */}
+                    <div className="flex flex-col md:flex-row gap-6 md:gap-8 md:overflow-x-auto pb-6 items-stretch md:items-start w-full">
                         {KANBAN_COLUMNS.map(col => (
-                            <div key={col} className="w-[85vw] md:w-80 flex-shrink-0 bg-zinc-50 border border-zinc-200 p-5 rounded-sm snap-center md:snap-start">
+                            <div key={col} className="w-full md:w-80 flex-shrink-0 bg-zinc-50 border border-zinc-200 p-5 rounded-sm">
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 flex justify-between border-b border-zinc-200 pb-3">
                                     {col} <span className="bg-zinc-200 px-2 rounded-full text-black">{tasks.filter(t => t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).length}</span>
                                 </h4>
@@ -1036,6 +1046,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
+            {/* NEU: Dokumentablage als responsive Grid statt starrer Tabelle */}
             {adminSubView === 'dokumente' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8"><h3 className="serif text-3xl italic">Zentrale Dokumente</h3>
@@ -1056,28 +1067,36 @@ export default function AdminArea({ user, touren, onLogout }) {
                             </div>
                         )}
                     </div>
-                    <div className="bg-white border border-zinc-200 overflow-x-auto w-full">
-                        <table className="w-full text-left text-sm border-collapse min-w-[600px]">
-                            <thead><tr className="border-b border-zinc-200 bg-zinc-50 text-[10px] uppercase tracking-widest text-zinc-500 font-bold"><th className="p-5">Dateiname</th><th className="p-5">Ordner / Kategorie</th><th className="p-5 text-right">Aktionen</th></tr></thead>
-                            <tbody className="divide-y divide-zinc-100">
-                                {docs.filter(d => (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).map(d => (
-                                <tr key={d.id} className="hover:bg-zinc-50 transition group">
-                                    <td className="p-5 flex gap-4 items-center"><div className="p-3 bg-zinc-100 text-zinc-400 rounded-sm"><FileText size={20}/></div><div className="min-w-0"><span className="font-bold text-base block mb-1 truncate">{d.name}</span> <span className="text-[10px] text-zinc-400 tracking-widest">{d.size}</span></div></td>
-                                    <td className="p-5 text-xs font-bold uppercase tracking-widest text-zinc-500">
-                                        {d.category}
-                                        {d.subcategory && <span className="block text-[9px] text-zinc-400 mt-1 font-normal">{d.subcategory}</span>}
-                                    </td>
-                                    <td className="p-5 text-right">
-                                        <div className="flex justify-end gap-4 opacity-100 md:opacity-50 group-hover:opacity-100 transition">
-                                            <button onClick={() => setEditingDoc(d)} className="hover:text-black flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold"><Edit size={14}/> Edit</button>
-                                            {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="hover:text-black flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold"><ExternalLink size={14}/> Öffnen</a>}
+                    
+                    {/* Grid-Ansicht der Dokumente für perfekte Lesbarkeit auf Handy */}
+                    <div className="bg-white border border-zinc-200 w-full">
+                        <div className="hidden md:grid grid-cols-12 gap-4 bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-widest font-bold text-[10px] p-5">
+                            <div className="col-span-6">Dateiname</div>
+                            <div className="col-span-4">Ordner / Kategorie</div>
+                            <div className="col-span-2 text-right">Aktionen</div>
+                        </div>
+                        <div className="divide-y divide-zinc-100">
+                            {docs.filter(d => (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).map(d => (
+                                <div key={d.id} className="flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 p-5 hover:bg-zinc-50 transition group">
+                                    <div className="col-span-6 flex gap-4 items-start md:items-center">
+                                        <div className="p-3 bg-zinc-100 text-zinc-400 rounded-sm hidden sm:block flex-shrink-0"><FileText size={20}/></div>
+                                        <div className="min-w-0 flex-1">
+                                            <span className="font-bold text-sm md:text-base block mb-1 truncate leading-tight">{d.name}</span>
+                                            <span className="text-[10px] text-zinc-400 tracking-widest">{d.size}</span>
                                         </div>
-                                    </td>
-                                </tr>
+                                    </div>
+                                    <div className="col-span-4 text-xs font-bold uppercase tracking-widest text-zinc-500 flex flex-col justify-center">
+                                        {d.category}
+                                        {d.subcategory && <span className="block text-[9px] text-zinc-400 mt-1 font-normal normal-case tracking-normal">{d.subcategory}</span>}
+                                    </div>
+                                    <div className="col-span-2 flex justify-start md:justify-end gap-3 mt-3 md:mt-0 pt-4 md:pt-0 border-t md:border-transparent border-zinc-100 items-center opacity-100 md:opacity-50 group-hover:opacity-100 transition">
+                                        <button onClick={() => setEditingDoc(d)} className="hover:text-black flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold bg-zinc-100 md:bg-transparent px-4 md:px-0 py-2 md:py-0 rounded-sm md:rounded-none flex-1 md:flex-none justify-center"><Edit size={14}/> Edit</button>
+                                        {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="hover:text-black flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold bg-zinc-100 md:bg-transparent px-4 md:px-0 py-2 md:py-0 rounded-sm md:rounded-none flex-1 md:flex-none justify-center"><ExternalLink size={14}/> Öffnen</a>}
+                                    </div>
+                                </div>
                             ))}
-                            {docs.length === 0 && <tr><td colSpan="3" className="p-12 text-center text-zinc-400 text-sm uppercase tracking-widest">Keine Dokumente in dieser Ansicht.</td></tr>}
-                            </tbody>
-                        </table>
+                            {docs.length === 0 && <div className="p-12 text-center text-zinc-400 text-sm uppercase tracking-widest">Keine Dokumente in dieser Ansicht.</div>}
+                        </div>
                     </div>
                 </div>
             )}
