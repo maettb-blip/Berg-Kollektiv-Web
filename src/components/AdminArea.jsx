@@ -216,6 +216,18 @@ export default function AdminArea({ user, touren, onLogout }) {
     const tourTitle = fd.get('title');
     const safeTitleFolder = tourTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'tour';
 
+    // Status Logik
+    const statusStr = fd.get('tour_status');
+    let isVisible = true;
+    let isExample = false;
+    
+    if (statusStr === 'hidden') {
+        isVisible = false;
+    } else if (statusStr === 'example') {
+        isVisible = true; // Beispieltouren sind technisch sichtbar, werden aber speziell gefiltert
+        isExample = true;
+    }
+
     try {
         if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
             const uploadPromises = Array.from(imageFiles).map(async (file) => {
@@ -231,15 +243,15 @@ export default function AdminArea({ user, touren, onLogout }) {
 
         const data = {
             title: tourTitle, 
-            visible: editingTour.visible !== false,
-            date: fd.get('date'),
+            visible: isVisible,
+            isExample: isExample,
+            date: fd.get('date') || '', // Optional bei Ideen
             description: fd.get('description'), 
-            price: fd.get('price'), 
-            leistungen: fd.get('leistungen'),
-            anforderungen: fd.get('anforderungen'), 
-            ablauf: fd.get('ablauf'), 
-            material: fd.get('material'),
-            // Neue Filter-Kategorien speichern
+            price: fd.get('price') || '', // Optional bei Ideen
+            leistungen: fd.get('leistungen') || '',
+            anforderungen: fd.get('anforderungen') || '', 
+            ablauf: fd.get('ablauf') || '', 
+            material: fd.get('material') || '',
             kategorie: fd.get('kategorie') || 'Hochtour',
             technik: parseInt(fd.get('technik')) || 2,
             ausdauer: parseInt(fd.get('ausdauer')) || 2,
@@ -255,7 +267,7 @@ export default function AdminArea({ user, touren, onLogout }) {
             logAction(`Tour aktualisiert: ${data.title}`);
         } else {
             await addDoc(collection(db, 'touren'), data);
-            logAction(`Neue Tour erstellt: ${data.title}`);
+            logAction(`Neue Tour/Idee erstellt: ${data.title}`);
         }
         setEditingTour(null);
     } catch (err) { alert("Fehler beim Speichern der Tour."); } 
@@ -770,20 +782,20 @@ export default function AdminArea({ user, touren, onLogout }) {
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <h3 className="serif text-3xl italic">Touren Verwalten</h3>
-                        <button onClick={() => setEditingTour({ title: '', visible: true, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', kategorie: 'Hochtour', technik: 2, ausdauer: 2 })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
+                        <button onClick={() => setEditingTour({ title: '', visible: true, isExample: false, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', kategorie: 'Hochtour', technik: 2, ausdauer: 2 })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
                     </div>
 
                     {/* FILTER BEREICH */}
                     {!editingTour && (
                         <div className="flex flex-col gap-4 mb-8 bg-zinc-50 p-4 md:p-6 border border-zinc-200">
                             <div className="flex flex-wrap gap-4 border-b border-zinc-200 pb-4">
-                                {['Öffentlich', 'Versteckt', 'Alle'].map(status => (
+                                {['Öffentlich', 'Versteckt', 'Beispieltouren', 'Alle'].map(status => (
                                     <button 
                                         key={status} 
                                         onClick={() => setTourStatusFilter(status)}
                                         className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${tourStatusFilter === status ? 'bg-black text-white' : 'bg-white text-zinc-500 border border-zinc-200 hover:border-black hover:text-black'}`}
                                     >
-                                        {status === 'Öffentlich' ? 'Öffentliche Touren' : status === 'Versteckt' ? 'Versteckte Entwürfe' : 'Alle Touren'}
+                                        {status === 'Öffentlich' ? 'Öffentliche Touren' : status === 'Versteckt' ? 'Versteckte Entwürfe' : status}
                                     </button>
                                 ))}
                             </div>
@@ -807,26 +819,27 @@ export default function AdminArea({ user, touren, onLogout }) {
                             <div className="flex justify-between items-center border-b border-zinc-200 pb-4 mb-6">
                                 <h3 className="serif text-2xl italic">{editingTour.id ? 'Tour bearbeiten' : 'Neue Tour anlegen'}</h3>
                             </div>
+                            
+                            {/* NEU: Tour Status (Sichtbarkeit & Beispieltouren) */}
+                            <div className="bg-white p-6 border border-zinc-300 shadow-sm md:col-span-2 mb-8">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4 block">Sichtbarkeit & Status der Tour</label>
+                                <select 
+                                    name="tour_status" 
+                                    defaultValue={editingTour.isExample ? 'example' : (editingTour.visible === false ? 'hidden' : 'public')}
+                                    className="w-full border-b border-zinc-300 p-3 text-base outline-none focus:border-black transition cursor-pointer bg-transparent font-medium"
+                                >
+                                    <option value="public">Öffentlich publizierte Tour (Sichtbar für alle)</option>
+                                    <option value="hidden">Versteckter Entwurf (Nicht sichtbar)</option>
+                                    <option value="example">Beispieltour / Ideenpool (Ohne Preis/Termin, dient als Inspiration)</option>
+                                </select>
+                                <p className="text-xs text-zinc-400 mt-3">Beispieltouren erscheinen in einer speziellen "Ideen-Ansicht" und bieten statt einer Buchung ein unverbindliches Anfrageformular an.</p>
+                            </div>
+
                             <div className="grid md:grid-cols-2 gap-8">
                                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel der Tour</label><input name="title" defaultValue={editingTour.title} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
-                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Datum / Zeitraum</label><input name="date" defaultValue={editingTour.date} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
-                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Preis</label><input name="price" defaultValue={editingTour.price} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Datum / Zeitraum <span className="font-normal normal-case">(optional bei Beispieltouren)</span></label><input name="date" defaultValue={editingTour.date} className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Preis <span className="font-normal normal-case">(optional bei Beispieltouren)</span></label><input name="price" defaultValue={editingTour.price} className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
                                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Max. Teilnehmer</label><input name="maxPlaetze" type="number" defaultValue={editingTour.maxPlaetze} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
-                                
-                                <div className="flex items-center h-full pt-4 md:col-span-2">
-                                    <label className="relative flex items-center gap-4 bg-white p-5 border border-zinc-300 hover:border-black transition w-full cursor-pointer select-none group">
-                                        <div className="relative flex items-center justify-center w-6 h-6 flex-shrink-0">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={editingTour.visible !== false} 
-                                                onChange={(e) => setEditingTour({ ...editingTour, visible: e.target.checked })} 
-                                                className="peer appearance-none w-full h-full border-2 border-zinc-300 rounded-none bg-white checked:bg-black checked:border-black transition-all cursor-pointer m-0" 
-                                            />
-                                            <svg className="absolute w-4 h-4 text-white pointer-events-none hidden peer-checked:block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                        </div>
-                                        <span className="text-sm font-bold uppercase tracking-widest text-zinc-600 group-hover:text-black transition">Tour auf Website sichtbar (Publizieren)</span>
-                                    </label>
-                                </div>
                             </div>
                             
                             <div className="pt-6 border-t border-zinc-200 md:col-span-2">
@@ -912,9 +925,13 @@ export default function AdminArea({ user, touren, onLogout }) {
                         <div className="space-y-4 fade-in">
                             {touren.filter(t => {
                                 const isVisible = t.visible !== false;
-                                if (tourStatusFilter === 'Öffentlich' && !isVisible) return false;
+                                const isExample = t.isExample === true;
+                                
+                                if (tourStatusFilter === 'Beispieltouren' && !isExample) return false;
+                                if (tourStatusFilter === 'Öffentlich' && (!isVisible || isExample)) return false;
                                 if (tourStatusFilter === 'Versteckt' && isVisible) return false;
                                 if (tourKatFilter !== 'Alle' && getKat(t) !== tourKatFilter) return false;
+                                
                                 return true;
                             }).map(t => (
                                 <div key={t.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
@@ -922,9 +939,10 @@ export default function AdminArea({ user, touren, onLogout }) {
                                         <p className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center flex-wrap gap-2">
                                             {t.title} 
                                             <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 text-[8px] rounded-sm">{getKat(t)}</span>
+                                            {t.isExample === true && <span className="text-blue-500 bg-blue-50 px-2 py-0.5 text-[8px]">[BEISPIELTOUR]</span>}
                                             {t.visible === false && <span className="text-red-500 bg-red-50 px-2 py-0.5 text-[8px]">[VERSTECKT]</span>}
                                         </p>
-                                        <p className="text-xs text-zinc-500">{t.date} — Level T{getTech(t)}/A{getAusd(t)}</p>
+                                        <p className="text-xs text-zinc-500">{t.date || 'Kein Datum'} — Level T{getTech(t)}/A{getAusd(t)}</p>
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
                                         <button onClick={() => setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
@@ -934,7 +952,9 @@ export default function AdminArea({ user, touren, onLogout }) {
                             ))}
                             {touren.filter(t => {
                                 const isVisible = t.visible !== false;
-                                if (tourStatusFilter === 'Öffentlich' && !isVisible) return false;
+                                const isExample = t.isExample === true;
+                                if (tourStatusFilter === 'Beispieltouren' && !isExample) return false;
+                                if (tourStatusFilter === 'Öffentlich' && (!isVisible || isExample)) return false;
                                 if (tourStatusFilter === 'Versteckt' && isVisible) return false;
                                 if (tourKatFilter !== 'Alle' && getKat(t) !== tourKatFilter) return false;
                                 return true;

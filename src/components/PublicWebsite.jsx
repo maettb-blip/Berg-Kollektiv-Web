@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp } from "firebase/firestore";
-import { FileText, Tag, Filter, Search, Info } from 'lucide-react';
+import { FileText, Tag, Filter, Search, Info, Hand } from 'lucide-react';
 
 // ==========================================
 // FIREBASE KONFIGURATION
@@ -125,12 +125,14 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [selectedTour, setSelectedTour] = useState(null);
     const [selectedTeamMember, setSelectedTeamMember] = useState(null);
     const [isBookingMode, setIsBookingMode] = useState(false);
+    const [isInquiryMode, setIsInquiryMode] = useState(false); // Für Beispieltouren-Anfragen
     const [isLightboxOpen, setIsLightboxOpen] = useState(null);
     const [bookingStatus, setBookingStatus] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // --- All Tours Modal & Filter States ---
     const [isAllToursModalOpen, setIsAllToursModalOpen] = useState(false);
+    const [isIdeenBoardOpen, setIsIdeenBoardOpen] = useState(false); // NEU: Ideen Board
     const [filterKategorie, setFilterKategorie] = useState('Alle');
     const [filterTechnik, setFilterTechnik] = useState('Alle');
     const [filterAusdauer, setFilterAusdauer] = useState('Alle');
@@ -139,12 +141,15 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     // --- Ladezustand für das Video ---
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     
-    // --- Touch Swipe States ---
+    // --- Touch & Scroll States für Galerie ---
     const [touchStart, setTouchStart] = useState(null);
     const [touchEnd, setTouchEnd] = useState(null);
+    const [hasScrolledGallery, setHasScrolledGallery] = useState(false);
     const minSwipeDistance = 50;
 
-    const visibleTours = touren.filter(t => t.visible !== false);
+    // Aufteilung in reale Touren und Beispieltouren
+    const visibleTours = touren.filter(t => t.visible !== false && t.isExample !== true);
+    const exampleTours = touren.filter(t => t.isExample === true);
     const recentTours = visibleTours.slice(0, 3);
 
     const filteredTours = visibleTours.filter(t => {
@@ -153,12 +158,23 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         if (filterAusdauer !== 'Alle' && getAusd(t) !== parseInt(filterAusdauer)) return false;
         return true;
     });
+    
+    // Filter für Beispieltouren
+    const filteredExampleTours = exampleTours.filter(t => {
+        if (filterKategorie !== 'Alle' && getKat(t) !== filterKategorie) return false;
+        return true;
+    });
 
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 100);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+
+    // Reset Gallery Scroll Hint when opening a new tour
+    useEffect(() => {
+        if (selectedTour) setHasScrolledGallery(false);
+    }, [selectedTour]);
 
     // --- Observer für Mobile Scroll "Hover" Effekte ---
     useEffect(() => {
@@ -184,7 +200,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         }, 100);
 
         return () => observer.disconnect();
-    }, [touren, angebotTab, isAllToursModalOpen]);
+    }, [touren, angebotTab, isAllToursModalOpen, isIdeenBoardOpen]);
 
     // Tastatur-Navigation in der Lightbox
     useEffect(() => {
@@ -226,8 +242,12 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const handleAnfrage = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
+        
+        // Entweder kommt das Thema aus dem selektierten Angebot, oder aus einer Idee (selectedTour)
+        const thema = selectedAngebot ? selectedAngebot.title : (selectedTour ? `Idee: ${selectedTour.title}` : 'Allgemeine Anfrage');
+        
         const data = {
-            thema: selectedAngebot.title,
+            thema: thema,
             vorname: fd.get('vorname'), name: fd.get('name'), email: fd.get('email'),
             nachricht: fd.get('nachricht'), timestamp: serverTimestamp()
         };
@@ -241,8 +261,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     "tr07IrpBTKjp_Isq6"
                 );
             }
-            setBookingStatus("Anfrage erfolgreich gesendet! Eine Bestätigung ist zu dir unterwegs.");
-            setTimeout(() => { setSelectedAngebot(null); setBookingStatus(null); }, 3000);
+            setBookingStatus("Anfrage erfolgreich gesendet! Wir melden uns bald.");
+            setTimeout(() => { setSelectedAngebot(null); setIsInquiryMode(false); setBookingStatus(null); if(selectedTour && selectedTour.isExample) setSelectedTour(null); }, 3000);
         } catch (err) { alert("Fehler beim Senden der Anfrage. Bitte versuche es später erneut."); }
     };
 
@@ -302,6 +322,15 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     #angebot .group.mobile-focus { border-color: black !important; }
                     #angebot .group.mobile-focus h3 { transform: translateX(0.25rem) !important; }
                     #angebot .group.mobile-focus .opacity-0 { opacity: 1 !important; }
+                }
+
+                @keyframes swipeHint {
+                    0% { transform: translateX(10px); opacity: 0; }
+                    50% { transform: translateX(-10px); opacity: 1; }
+                    100% { transform: translateX(-30px); opacity: 0; }
+                }
+                .animate-swipe-hint {
+                    animation: swipeHint 2s infinite ease-in-out;
                 }
             `}} />
 
@@ -377,7 +406,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         
                         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-20">
                             {recentTours.map(tour => (
-                                <div key={tour.id} className="tour-card group cursor-pointer" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); }}>
+                                <div key={tour.id} className="tour-card group cursor-pointer" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
                                     <div className="aspect-[4/5] overflow-hidden bg-zinc-100 mb-6 grayscale group-hover:grayscale-0 transition-all duration-1000 relative">
                                         <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={tour.title} />
                                         <div className="absolute top-4 right-4 bg-white/95 px-4 py-2 text-[8px] uppercase tracking-[0.2em] font-bold">
@@ -552,7 +581,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         {filteredTours.length > 0 ? (
                             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
                                 {filteredTours.map(tour => (
-                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); }}>
+                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
                                         <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
                                             <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
                                             <div className="absolute top-4 right-4 bg-white/95 px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
@@ -587,27 +616,95 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
 
-            {/* Modals für Angebote */}
+            {/* =========================================
+                NEU: MODAL IDEEN-BOARD (Beispieltouren)
+               ========================================= */}
+            {isIdeenBoardOpen && (
+                <div className="fixed inset-0 z-[150] flex flex-col bg-[#f9f9f7] overflow-y-auto fade-in">
+                    <div className="p-6 md:px-12 md:py-8 flex justify-between items-center bg-white border-b border-zinc-200 sticky top-0 z-20">
+                        <h2 className="serif text-3xl md:text-4xl italic">Touren Ideen & Inspiration</h2>
+                        <button onClick={() => setIsIdeenBoardOpen(false)} className="w-12 h-12 flex items-center justify-center bg-zinc-100 hover:bg-black hover:text-white rounded-full transition-colors text-2xl">&times;</button>
+                    </div>
+                    
+                    <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
+                        <div className="max-w-7xl mx-auto flex flex-wrap gap-4 items-center">
+                            <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mr-4">Filter:</span>
+                            {['Alle', 'Hochtour', 'Skitour', 'Klettern', 'Kurse'].map(kat => (
+                                <button key={kat} onClick={() => setFilterKategorie(kat)} className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors font-bold ${filterKategorie === kat ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}>
+                                    {kat}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="p-6 md:p-12 max-w-7xl mx-auto w-full">
+                        {filteredExampleTours.length > 0 ? (
+                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
+                                {filteredExampleTours.map(tour => (
+                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
+                                        <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
+                                            <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
+                                            <div className="absolute top-4 left-4 bg-black text-white px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
+                                                {getKat(tour)}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-medium mb-4 uppercase">{tour.title}</h3>
+                                            <div className="flex justify-end items-end border-t border-zinc-100 pt-4 mt-4">
+                                                <div className="flex flex-col gap-1.5 items-end">
+                                                    <DifficultyDots label="Technik" level={getTech(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-32 text-zinc-400">
+                                <p className="text-lg uppercase tracking-widest">Keine Ideen für diese Kategorie gefunden.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modals für Angebote (mit Neuem Ideen Button) */}
             {selectedAngebot && (
                 <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
                     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedAngebot(null)}></div>
-                    <div className="relative bg-white w-full h-full md:max-h-[90vh] md:max-w-2xl shadow-2xl overflow-y-auto fade-in">
-                        <div className="h-80 md:h-[40vh] relative">
+                    <div className="relative bg-white w-full h-full md:max-h-[90vh] md:max-w-2xl shadow-2xl overflow-y-auto fade-in flex flex-col">
+                        <div className="h-80 md:h-[40vh] relative flex-shrink-0">
                             <img src={selectedAngebot.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
                             <button onClick={() => setSelectedAngebot(null)} className="absolute top-6 right-6 text-white text-3xl z-10">&times;</button>
                             <div className="absolute inset-0 bg-black/30 flex items-end p-8"><h2 className="serif text-4xl italic text-white">{selectedAngebot.title}</h2></div>
                         </div>
-                        <div className="p-8 md:p-12">
+                        <div className="p-8 md:p-12 flex-1 flex flex-col">
                             {bookingStatus ? ( <div className="text-center py-12 serif italic text-xl">{bookingStatus}</div> ) : (
-                                <div className="space-y-10">
+                                <div className="space-y-10 flex-1 flex flex-col">
                                     <p className="text-zinc-600 text-sm leading-relaxed font-light">{selectedAngebot.longDesc}</p>
-                                    <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100">
+                                    
+                                    {/* NEU: Ideen Button Section */}
+                                    <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
+                                        <h3 className="serif text-2xl italic mb-3">Benötigst du Ideen?</h3>
+                                        <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
+                                        <button onClick={() => { 
+                                            setSelectedAngebot(null); 
+                                            setFilterKategorie(selectedAngebot.title.includes('Klett') ? 'Klettern' : (selectedAngebot.title.includes('Hoch') ? 'Hochtour' : (selectedAngebot.title.includes('Ski') ? 'Skitour' : 'Alle')));
+                                            setIsIdeenBoardOpen(true); 
+                                        }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
+                                            Zu den Touren-Ideen
+                                        </button>
+                                    </div>
+
+                                    <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
+                                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Oder direkt anfragen:</h4>
                                         <div className="grid grid-cols-2 gap-6">
-                                            <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors" />
-                                            <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors" />
+                                            <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                            <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
                                         </div>
-                                        <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors" />
-                                        <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors h-28" />
+                                        <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                        <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent h-28" />
                                         <button type="submit" className="w-full bg-black text-white py-5 text-[9px] uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all">Anfrage Senden</button>
                                     </form>
                                 </div>
@@ -618,17 +715,24 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                GROSSES TOUR DETAIL MODAL (SPLIT-SCREEN)
+                GROSSES TOUR DETAIL MODAL (Für normale Touren & Ideen)
+                Mobile Scroll & Layout angepasst
                ========================================= */}
             {selectedTour && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-8">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
                     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedTour(null)}></div>
-                    <div className="relative bg-white w-full max-w-[95vw] lg:max-w-7xl h-full md:h-[95vh] shadow-2xl overflow-hidden fade-in flex flex-col md:flex-row">
+                    
+                    {/* WICHTIG: Mobile overflow-y-auto (scrollt als Ganzes), Desktop overflow-hidden (Split-Screen) */}
+                    <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
                         
-                        {/* Linke Seite: Bilder (Mit nativer Scroll-Swipe Funktion) */}
-                        <div className="w-full md:w-1/2 h-[45vh] md:h-full relative flex-shrink-0 bg-black group">
+                        {/* Linke Seite: Bilder */}
+                        {/* WICHTIG: Mobile sticky oder fließend (hier fließend, scrollt mit rauf), Desktop fixiert */}
+                        <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
                             
-                            <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth">
+                            <div 
+                                className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth"
+                                onScroll={() => setHasScrolledGallery(true)}
+                            >
                                 {(selectedTour.images || [selectedTour.image]).map((img, idx, arr) => (
                                     <div 
                                         key={idx} 
@@ -640,12 +744,21 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 ))}
                             </div>
                             
-                            {/* Hover Overlay: Macht klar, dass sich hier eine Galerie öffnet */}
-                            <div className="absolute inset-0 bg-black/0 md:group-hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none flex items-center justify-center">
-                                <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 md:group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
+                            {/* Hover Overlay Desktop: Galerie öffnen */}
+                            <div className="hidden md:flex absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none items-center justify-center">
+                                <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
                                     <Search size={14}/> Galerie öffnen
                                 </span>
                             </div>
+
+                            {/* Mobile Swipe Hint (Verschwindet beim Scrollen) */}
+                            {(!hasScrolledGallery && (selectedTour.images || [selectedTour.image]).length > 1) && (
+                                <div className="md:hidden absolute inset-0 z-[25] flex items-center justify-end pr-8 pointer-events-none">
+                                    <div className="bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 animate-swipe-hint">
+                                        <Hand size={14}/> Wischen
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Overlay am unteren Bildrand für den Titel */}
                             <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end pointer-events-none">
@@ -654,37 +767,43 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 <div className="relative z-[30] p-6 md:p-10">
                                     <div className="flex gap-3 items-center mb-3">
                                         <span className="bg-white text-black px-2 py-1 text-[8px] uppercase tracking-widest font-bold">{getKat(selectedTour)}</span>
+                                        {selectedTour.isExample && <span className="bg-blue-500 text-white px-2 py-1 text-[8px] uppercase tracking-widest font-bold">Idee</span>}
                                     </div>
                                     <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedTour.title}</h2>
                                 </div>
                             </div>
-                            {/* Close Button für Mobile auf dem Bild (muss klickbar bleiben -> pointer-events-auto) */}
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedTour(null); }} className="md:hidden absolute top-4 right-4 text-white text-3xl z-[40] bg-black/30 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
+                            {/* Close Button Mobile (fixed im Viewport) */}
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedTour(null); setIsInquiryMode(false); }} className="md:hidden fixed top-4 right-4 text-white text-3xl z-[60] bg-black/40 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
                         </div>
                         
-                        {/* Rechte Seite: Inhalt (Scrollbar) */}
-                        <div className="w-full md:w-1/2 h-full overflow-y-auto bg-white relative">
-                            {/* Close Button für Desktop */}
-                            <button onClick={() => setSelectedTour(null)} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
+                        {/* Rechte Seite: Inhalt */}
+                        {/* WICHTIG: Mobile h-auto (passt sich an Inhalt an), Desktop overflow-y-auto */}
+                        <div className="w-full md:w-1/2 h-auto md:h-full md:overflow-y-auto bg-white relative z-10 flex flex-col">
+                            {/* Close Button Desktop */}
+                            <button onClick={() => { setSelectedTour(null); setIsInquiryMode(false); }} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
                             
-                            <div className="p-6 md:p-10 lg:p-16">
-                                {!isBookingMode ? (
-                                    <div className="fade-in space-y-12">
+                            <div className="p-6 md:p-10 lg:p-16 flex-1 flex flex-col">
+                                {!isBookingMode && !isInquiryMode ? (
+                                    <div className="fade-in space-y-12 flex-1 flex flex-col">
                                         
-                                        <div className="space-y-8">
+                                        <div className="space-y-8 flex-1">
                                             <div>
                                                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Beschreibung</h3>
                                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
                                             </div>
                                             
-                                            {/* Alle Details (inkl. Datum & Anforderungen) als dezente Aufklappfenster */}
+                                            {/* Details & Accordions */}
                                             <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
                                                 
-                                                <Accordion title="Datum & Durchführung">
-                                                    <div className="text-zinc-600 font-light text-sm pb-2">{selectedTour.date}</div>
-                                                </Accordion>
+                                                {/* Datum nur zeigen, wenn es keine Idee ist, oder wenn eines explizit gesetzt wurde */}
+                                                {(!selectedTour.isExample || selectedTour.date) && (
+                                                    <Accordion title="Datum & Durchführung">
+                                                        <div className="text-zinc-600 font-light text-sm pb-2">{selectedTour.date || 'Auf Anfrage'}</div>
+                                                    </Accordion>
+                                                )}
 
-                                                <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />
+                                                {/* Ablauf nur bei normalen Touren */}
+                                                {!selectedTour.isExample && <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />}
                                                 
                                                 <Accordion title="Anforderungen & Level">
                                                     <div className="pb-4 space-y-6">
@@ -717,71 +836,98 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 </Accordion>
                                             </div>
                                             
-                                            <div className="grid md:grid-cols-2 gap-6 pt-4">
-                                                <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
-                                                    <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-3">Material</p>
-                                                    <a href="/packliste.pdf" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-zinc-500 mb-4 underline underline-offset-4"><FileText size={16}/> Material gemäss PDF</a>
-                                                    <p className="text-xs text-zinc-500 italic leading-relaxed whitespace-pre-line">{selectedTour.material || 'Keine speziellen Ergänzungen.'}</p>
+                                            {/* Preis & Material nur für normale Touren */}
+                                            {!selectedTour.isExample && (
+                                                <div className="grid md:grid-cols-2 gap-6 pt-4">
+                                                    <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
+                                                        <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-3">Material</p>
+                                                        <a href="/packliste.pdf" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-zinc-500 mb-4 underline underline-offset-4"><FileText size={16}/> Material gemäss PDF</a>
+                                                        <p className="text-xs text-zinc-500 italic leading-relaxed whitespace-pre-line">{selectedTour.material || 'Keine speziellen Ergänzungen.'}</p>
+                                                    </div>
+                                                    <div className="p-6 bg-[#f9f9f7] border border-zinc-100 flex flex-col justify-center">
+                                                        <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-2">Preis & Leistungen</p>
+                                                        <p className="serif text-3xl italic mb-3">{selectedTour.price}</p>
+                                                        <p className="text-xs text-zinc-500 leading-relaxed whitespace-pre-line">{selectedTour.leistungen || 'Führung durch dipl. Bergführer.'}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="p-6 bg-[#f9f9f7] border border-zinc-100 flex flex-col justify-center">
-                                                    <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-2">Preis & Leistungen</p>
-                                                    <p className="serif text-3xl italic mb-3">{selectedTour.price}</p>
-                                                    <p className="text-xs text-zinc-500 leading-relaxed whitespace-pre-line">{selectedTour.leistungen || 'Führung durch dipl. Bergführer.'}</p>
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
                                         
-                                        <button onClick={() => setIsBookingMode(true)} disabled={selectedTour.maxPlaetze <= selectedTour.angemeldet} className={`w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all ${selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800 shadow-xl'}`}>
-                                            {selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'Ausgebucht' : 'Verbindlich Anmelden'}
-                                        </button>
+                                        {/* Button Logik: Buchen vs Anfrage */}
+                                        {selectedTour.isExample ? (
+                                            <button onClick={() => setIsInquiryMode(true)} className="mt-8 w-full py-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all bg-black text-white hover:bg-zinc-800 shadow-xl">
+                                                Interesse wecken / Unverbindlich anfragen
+                                            </button>
+                                        ) : (
+                                            <button onClick={() => setIsBookingMode(true)} disabled={selectedTour.maxPlaetze <= selectedTour.angemeldet} className={`mt-8 w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all ${selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800 shadow-xl'}`}>
+                                                {selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'Ausgebucht' : 'Verbindlich Anmelden'}
+                                            </button>
+                                        )}
                                     </div>
                                 ) : (
-                                    <div className="fade-in max-w-2xl mx-auto">
+                                    <div className="fade-in max-w-2xl mx-auto w-full">
                                         {bookingStatus ? (
-                                            <div className="text-center space-y-8 py-20"><div className="text-4xl">✓</div><p className="serif text-2xl italic">{bookingStatus}</p><button onClick={() => { setSelectedTour(null); setIsBookingMode(false); }} className="text-[10px] uppercase tracking-widest border-b border-black pb-1">Zurück zur Übersicht</button></div>
+                                            <div className="text-center space-y-8 py-20"><div className="text-4xl">✓</div><p className="serif text-2xl italic">{bookingStatus}</p><button onClick={() => { setSelectedTour(null); setIsBookingMode(false); setIsInquiryMode(false); }} className="text-[10px] uppercase tracking-widest border-b border-black pb-1">Zurück</button></div>
                                         ) : (
-                                            <form onSubmit={handleBooking} className="space-y-8">
-                                                <div className="flex justify-between items-end mb-10"><h3 className="serif text-3xl italic">Anmeldung</h3><button type="button" onClick={() => setIsBookingMode(false)} className="text-[10px] uppercase tracking-widest opacity-40 hover:opacity-100 transition">Abbrechen</button></div>
-                                                <div className="grid grid-cols-2 gap-8">
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Vorname *</label><input name="vorname" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Name *</label><input name="name" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                </div>
-                                                <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Adresse *</label><input name="adresse" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                <div className="grid grid-cols-2 gap-8">
-                                                    <div className="grid grid-cols-3 gap-4 border-b border-zinc-200 pb-2">
-                                                        <div className="col-span-1 space-y-1">
-                                                            <label className="text-[8px] uppercase tracking-widest text-zinc-400">PLZ *</label>
-                                                            <input name="plz" required className="w-full bg-transparent outline-none text-sm" />
-                                                        </div>
-                                                        <div className="col-span-2 space-y-1">
-                                                            <label className="text-[8px] uppercase tracking-widest text-zinc-400">Ort *</label>
-                                                            <input name="ort" required className="w-full bg-transparent outline-none text-sm" />
-                                                        </div>
+                                            /* Anzeige Formular Buchen vs Anfrage */
+                                            isInquiryMode ? (
+                                                <form onSubmit={handleAnfrage} className="space-y-8">
+                                                    <div className="flex justify-between items-end mb-10"><h3 className="serif text-3xl italic">Unverbindliche Anfrage</h3><button type="button" onClick={() => setIsInquiryMode(false)} className="text-[10px] uppercase tracking-widest opacity-40 hover:opacity-100 transition">Abbrechen</button></div>
+                                                    <p className="text-xs text-zinc-500 mb-6">Wir freuen uns über dein Interesse an der Tour-Idee "{selectedTour.title}". Lass uns wissen, wann du Zeit hast und wir schauen die Details gemeinsam an.</p>
+                                                    <div className="grid grid-cols-2 gap-8">
+                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Vorname *</label><input name="vorname" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Name *</label><input name="name" required className="w-full bg-transparent outline-none text-sm" /></div>
                                                     </div>
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2">
-                                                        <label className="text-[8px] uppercase tracking-widest text-zinc-400">Geburtstag *</label>
-                                                        <input type="date" name="geburtstag" required className="w-full bg-transparent outline-none text-sm cursor-pointer" />
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-8">
                                                     <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">E-Mail *</label><input type="email" name="email" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Telefon *</label><input type="tel" name="phone" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                </div>
-                                                <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Ernährung (Allergien, Vegetarisch...)</label><input name="ernaehrung" className="w-full bg-transparent outline-none text-sm" /></div>
-                                                <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Besonderes / Bemerkungen</label><textarea name="besonderes" rows="2" className="w-full bg-transparent outline-none text-sm resize-none"></textarea></div>
-                                                <div className="flex items-start gap-4 py-6 group cursor-pointer">
-                                                    <div className="relative flex items-center">
-                                                        <input type="checkbox" id="agb_check" name="agb_accept" required className="peer appearance-none w-5 h-5 border border-zinc-300 rounded-none bg-white checked:bg-black checked:border-black transition-all cursor-pointer" />
-                                                        <svg className="absolute w-3 h-3 text-white pointer-events-none hidden peer-checked:block left-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Deine Nachricht (Wunschdatum, Gruppengröße...)</label><textarea name="nachricht" rows="4" required className="w-full bg-transparent outline-none text-sm resize-y"></textarea></div>
+                                                    <button type="submit" disabled={isSubmitting} className={`w-full py-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all shadow-xl ${isSubmitting ? 'bg-zinc-400 text-white cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800'}`}>
+                                                        {isSubmitting ? 'Wird gesendet...' : 'Anfrage Senden'}
+                                                    </button>
+                                                </form>
+                                            ) : (
+                                                <form onSubmit={handleBooking} className="space-y-8">
+                                                    <div className="flex justify-between items-end mb-10"><h3 className="serif text-3xl italic">Anmeldung</h3><button type="button" onClick={() => setIsBookingMode(false)} className="text-[10px] uppercase tracking-widest opacity-40 hover:opacity-100 transition">Abbrechen</button></div>
+                                                    <div className="grid grid-cols-2 gap-8">
+                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Vorname *</label><input name="vorname" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Name *</label><input name="name" required className="w-full bg-transparent outline-none text-sm" /></div>
                                                     </div>
-                                                    <label htmlFor="agb_check" className="text-[10px] text-zinc-500 leading-relaxed uppercase tracking-widest cursor-pointer select-none flex-1">
-                                                        Ich habe die <a href="/agb.pdf" target="_blank" rel="noreferrer" className="underline hover:text-black transition-colors" onClick={(e) => e.stopPropagation()}>allgemeinen Geschäftsbedingungen</a> gelesen und akzeptiere diese. * <span className="block mt-2 text-zinc-400 normal-case italic tracking-normal text-[11px]">Der Abschluss einer Annullationskostenversicherung wird dringend empfohlen.</span>
-                                                    </label>
-                                                </div>
-                                                <button type="submit" disabled={isSubmitting} className={`w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all shadow-xl ${isSubmitting ? 'bg-zinc-400 text-white cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800'}`}>
-                                                    {isSubmitting ? 'Wird gesendet...' : 'Verbindlich Anmelden'}
-                                                </button>
-                                            </form>
+                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Adresse *</label><input name="adresse" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                                    <div className="grid grid-cols-2 gap-8">
+                                                        <div className="grid grid-cols-3 gap-4 border-b border-zinc-200 pb-2">
+                                                            <div className="col-span-1 space-y-1">
+                                                                <label className="text-[8px] uppercase tracking-widest text-zinc-400">PLZ *</label>
+                                                                <input name="plz" required className="w-full bg-transparent outline-none text-sm" />
+                                                            </div>
+                                                            <div className="col-span-2 space-y-1">
+                                                                <label className="text-[8px] uppercase tracking-widest text-zinc-400">Ort *</label>
+                                                                <input name="ort" required className="w-full bg-transparent outline-none text-sm" />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1 border-b border-zinc-200 pb-2">
+                                                            <label className="text-[8px] uppercase tracking-widest text-zinc-400">Geburtstag *</label>
+                                                            <input type="date" name="geburtstag" required className="w-full bg-transparent outline-none text-sm cursor-pointer" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-8">
+                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">E-Mail *</label><input type="email" name="email" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Telefon *</label><input type="tel" name="phone" required className="w-full bg-transparent outline-none text-sm" /></div>
+                                                    </div>
+                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Ernährung (Allergien, Vegetarisch...)</label><input name="ernaehrung" className="w-full bg-transparent outline-none text-sm" /></div>
+                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Besonderes / Bemerkungen</label><textarea name="besonderes" rows="2" className="w-full bg-transparent outline-none text-sm resize-none"></textarea></div>
+                                                    <div className="flex items-start gap-4 py-6 group cursor-pointer">
+                                                        <div className="relative flex items-center">
+                                                            <input type="checkbox" id="agb_check" name="agb_accept" required className="peer appearance-none w-5 h-5 border border-zinc-300 rounded-none bg-white checked:bg-black checked:border-black transition-all cursor-pointer" />
+                                                            <svg className="absolute w-3 h-3 text-white pointer-events-none hidden peer-checked:block left-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                        </div>
+                                                        <label htmlFor="agb_check" className="text-[10px] text-zinc-500 leading-relaxed uppercase tracking-widest cursor-pointer select-none flex-1">
+                                                            Ich habe die <a href="/agb.pdf" target="_blank" rel="noreferrer" className="underline hover:text-black transition-colors" onClick={(e) => e.stopPropagation()}>allgemeinen Geschäftsbedingungen</a> gelesen und akzeptiere diese. * <span className="block mt-2 text-zinc-400 normal-case italic tracking-normal text-[11px]">Der Abschluss einer Annullationskostenversicherung wird dringend empfohlen.</span>
+                                                        </label>
+                                                    </div>
+                                                    <button type="submit" disabled={isSubmitting} className={`w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all shadow-xl ${isSubmitting ? 'bg-zinc-400 text-white cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800'}`}>
+                                                        {isSubmitting ? 'Wird gesendet...' : 'Verbindlich Anmelden'}
+                                                    </button>
+                                                </form>
+                                            )
                                         )}
                                     </div>
                                 )}
