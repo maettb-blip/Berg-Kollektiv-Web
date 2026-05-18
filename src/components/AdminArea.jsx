@@ -7,7 +7,7 @@ import { getStorage } from "firebase/storage";
 import { 
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
   LayoutDashboard, User, Users, X, Edit, ExternalLink, Trash2, MapPin, 
-  FileText, Share2, Link as LinkIcon, UploadCloud
+  FileText, Share2, Link as LinkIcon, UploadCloud, Lock
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -35,13 +35,6 @@ const getKat = (t) => {
 const getTech = (t) => t && t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t && t.ausdauer ? Number(t.ausdauer) : 2;
 
-// Hardcoded Fallback für die Initialisierung
-const TEAM_FALLBACK = [
-    { name: "ADRIAN BÜSCHLEN", title: "BERGFÜHRER IVBV", desc: "Skifanatiker und Bergführer aus Leidenschaft.", superkraft: "Findet im dichtesten Nebel zielsicher die Kaffeemaschine der Hütte.", schwaeche: "Wird 'grumpy', wenn der Gipfelschnaps im Tal vergessen wurde.", snack: "Getrocknete Mangos & Appenzeller Biberli", zitat: "Steiler ist geiler.", visible: true },
-    { name: "JENS Schärer", title: "BERGFÜHRER IVBV", desc: "Spezialist für Eisklettern und winterliche Expeditionen.", superkraft: "Hat eine eingebaute Heizspirale in den Fingern (friert nie beim Eisklettern).", schwaeche: "Vergisst immer, wo er die Stirnlampe hingelegt hat (meistens auf dem Kopf).", snack: "Käse. Einfach nur ein riesiges Stück Bergkäse.", zitat: "Eis ist auch nur Wasser mit Haltung.", visible: true },
-    { name: "MATTHIAS Bettschen", title: "BERGFÜHRER IVBV", desc: "Kletterexperte im Granit und Kalk.", superkraft: "Findet an einer aalglatten Felswand noch einen Hook für den kleinen Zeh.", schwaeche: "Kann an keiner Engadiner Dorfbäckerei vorbeigehen, ohne eine Nusstorte zu kaufen.", snack: "Engadiner Nusstorte (was sonst?)", zitat: "Ruhe bewahren und weiterklettern.", visible: true }
-];
-
 export default function AdminArea({ user, touren, onLogout }) {
   const [adminSubView, setAdminSubView] = useState('dashboard');
   
@@ -54,12 +47,17 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [protocols, setProtocols] = useState([]);
   const [logs, setLogs] = useState([]); 
   const [teamProfiles, setTeamProfiles] = useState([]);
+  const [materialLists, setMaterialLists] = useState([]);
   
   // Dynamische Settings
   const [docKategorien, setDocKategorien] = useState(['Rechnungen', 'Konzepte', 'Sponsoring', 'Bilder']);
   const [docSubkategorien, setDocSubkategorien] = useState({});
   const [taskKategorien, setTaskKategorien] = useState(['Allgemein', 'Tourenplanung', 'Ausrüstung', 'Marketing', 'Finanzen']);
   const [protocolKategorien, setProtocolKategorien] = useState(['Teamsitzung', 'Tourenplanung', 'Ideen']);
+  const [teamAttributes, setTeamAttributes] = useState([]); 
+
+  // Aktive Attribute definieren (Fallback falls DB leer ist)
+  const activeTeamAttributes = teamAttributes.length > 0 ? teamAttributes : ['Superkraft', 'Kryptonit', 'Touren-Snack', 'Lebensmotto'];
 
   // UI States
   const [selectedKunde, setSelectedKunde] = useState(null);
@@ -76,13 +74,13 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [showDocKategorienModal, setShowDocKategorienModal] = useState(false);
   const [showTaskKategorienModal, setShowTaskKategorienModal] = useState(false);
   const [showProtocolKategorienModal, setShowProtocolKategorienModal] = useState(false);
+  const [showTeamAttributesModal, setShowTeamAttributesModal] = useState(false);
   
   const [taskFilter, setTaskFilter] = useState('Alle');
   const [docFilter, setDocFilter] = useState('Alle');
   const [docSubFilter, setDocSubFilter] = useState('Alle');
   const [protocolFilter, setProtocolFilter] = useState('Alle');
   
-  // Filter States für die Touren-Übersicht
   const [tourStatusFilter, setTourStatusFilter] = useState('Öffentlich');
   const [tourKatFilter, setTourKatFilter] = useState('Alle');
 
@@ -100,6 +98,7 @@ export default function AdminArea({ user, touren, onLogout }) {
       onSnapshot(collection(db, 'docs'), snap => setDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'protocols'), snap => setProtocols(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'team_profiles'), snap => setTeamProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+      onSnapshot(collection(db, 'material_lists'), snap => setMaterialLists(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'logs'), snap => {
           const fetchedLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           fetchedLogs.sort((a, b) => b.timestamp - a.timestamp); 
@@ -116,14 +115,13 @@ export default function AdminArea({ user, touren, onLogout }) {
           }
       }),
       onSnapshot(doc(db, 'settings', 'aufgaben'), snap => { if (snap.exists() && snap.data().kategorien) setTaskKategorien(snap.data().kategorien); }),
-      onSnapshot(doc(db, 'settings', 'protokolle'), snap => { if (snap.exists() && snap.data().kategorien) setProtocolKategorien(snap.data().kategorien); })
+      onSnapshot(doc(db, 'settings', 'protokolle'), snap => { if (snap.exists() && snap.data().kategorien) setProtocolKategorien(snap.data().kategorien); }),
+      onSnapshot(doc(db, 'settings', 'team_attributes'), snap => { if (snap.exists() && snap.data().labels) setTeamAttributes(snap.data().labels); })
     ];
     return () => unsubs.forEach(unsub => unsub());
   }, [user]);
 
-  // Für Dropdowns: Beziehe Teammitglieder aus der Profile-Collection. Fallback, falls DB leer.
-  const activeTeamProfiles = teamProfiles.length > 0 ? teamProfiles : TEAM_FALLBACK.map((t, i) => ({ id: `mock-${i}`, ...t }));
-  const teamMemberNames = [...new Set([...activeTeamProfiles.map(t => t.name), 'Allgemein'])];
+  const teamMemberNames = [...new Set([...teamProfiles.map(t => t.name), 'Allgemein'])];
 
   const logAction = async (actionText) => {
     if (!user) return;
@@ -201,6 +199,15 @@ export default function AdminArea({ user, touren, onLogout }) {
     catch (e) { console.error("Fehler", e); }
   };
 
+  const getLegacyTeamField = (member, attr) => {
+      if (!member) return '';
+      if (attr === 'Superkraft') return member.superkraft || '';
+      if (attr === 'Kryptonit') return member.schwaeche || '';
+      if (attr === 'Touren-Snack') return member.snack || '';
+      if (attr === 'Lebensmotto') return member.zitat || '';
+      return '';
+  };
+
   // --- SAVE TEAM MEMBER ---
   const saveTeamMember = async (e) => {
     e.preventDefault();
@@ -211,6 +218,11 @@ export default function AdminArea({ user, touren, onLogout }) {
 
     const name = fd.get('name');
     const safeNameFolder = name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'team';
+    
+    const customFields = {};
+    activeTeamAttributes.forEach(attr => {
+        customFields[attr] = fd.get(`custom_${attr}`) || '';
+    });
 
     try {
         if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
@@ -222,23 +234,19 @@ export default function AdminArea({ user, touren, onLogout }) {
             imageUrls = await Promise.all(uploadPromises);
         }
         
-        const isMock = editingTeamMember && editingTeamMember.id ? editingTeamMember.id.startsWith('mock-') : false;
         const combinedImages = [...(editingTeamMember.images || []), ...imageUrls];
 
         const data = {
             name: name,
             title: fd.get('title'),
             desc: fd.get('desc'),
-            superkraft: fd.get('superkraft'),
-            schwaeche: fd.get('schwaeche'),
-            snack: fd.get('snack'),
-            zitat: fd.get('zitat'),
+            customFields: customFields,
             visible: editingTeamMember.visible !== false,
-            image: combinedImages[0] || '/adrian.jpg', 
+            image: combinedImages[0] || '', 
             images: combinedImages
         };
 
-        if (editingTeamMember && editingTeamMember.id && !isMock) {
+        if (editingTeamMember && editingTeamMember.id) {
             await updateDoc(doc(db, 'team_profiles', editingTeamMember.id), data);
             logAction(`Teammitglied aktualisiert: ${data.name}`);
         } else {
@@ -251,11 +259,42 @@ export default function AdminArea({ user, touren, onLogout }) {
   };
 
   const deleteTeamMember = async (id, name) => {
-      if (id.startsWith('mock-')) return alert("Mock-Daten können nicht gelöscht werden.");
       if (!confirm(`Teammitglied "${name}" wirklich löschen?`)) return;
       try {
           await deleteDoc(doc(db, 'team_profiles', id));
           logAction(`Teammitglied gelöscht: ${name}`);
+      } catch (e) { alert("Fehler beim Löschen."); }
+  };
+
+  // --- SAVE MATERIAL LIST ---
+  const saveMaterialList = async (e) => {
+      e.preventDefault();
+      setIsUploading(true);
+      const fd = new FormData(e.target);
+      const file = fd.get('file');
+      const name = fd.get('name');
+
+      try {
+          const fileRef = ref(storage, `material/${Date.now()}_${file.name}`);
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          
+          await addDoc(collection(db, 'material_lists'), { name, url, createdAt: Date.now() });
+          logAction(`Materialliste hochgeladen: ${name}`);
+          e.target.reset();
+          alert("Erfolgreich hochgeladen!");
+      } catch (err) {
+          alert("Fehler beim Hochladen.");
+      } finally {
+          setIsUploading(false);
+      }
+  };
+
+  const deleteMaterialList = async (id, name) => {
+      if (!confirm(`Materialliste "${name}" wirklich löschen?`)) return;
+      try {
+          await deleteDoc(doc(db, 'material_lists', id));
+          logAction(`Materialliste gelöscht: ${name}`);
       } catch (e) { alert("Fehler beim Löschen."); }
   };
 
@@ -281,6 +320,9 @@ export default function AdminArea({ user, touren, onLogout }) {
         isExample = true;
     }
 
+    const materialListId = fd.get('material_list_id') || '';
+    const selectedMaterial = materialLists.find(m => m.id === materialListId);
+
     try {
         if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
             const uploadPromises = Array.from(imageFiles).map(async (file) => {
@@ -305,6 +347,11 @@ export default function AdminArea({ user, touren, onLogout }) {
             anforderungen: fd.get('anforderungen') || '', 
             ablauf: fd.get('ablauf') || '', 
             material: fd.get('material') || '',
+            materialListId: materialListId,
+            materialName: selectedMaterial ? selectedMaterial.name : '',
+            materialUrl: selectedMaterial ? selectedMaterial.url : '',
+            guide: fd.get('guide') || '',
+            interneNotizen: fd.get('interneNotizen') || '',
             kategorie: fd.get('kategorie') || 'Hochtour',
             technik: parseInt(fd.get('technik')) || 2,
             ausdauer: parseInt(fd.get('ausdauer')) || 2,
@@ -339,7 +386,6 @@ export default function AdminArea({ user, touren, onLogout }) {
       } catch (e) { alert("Fehler beim Löschen."); }
   };
 
-  // --- SAVE TASK / DOC / PROTOCOL ---
   const saveTask = async (taskData, fileObject) => {
     setIsUploading(true);
     let fileUrl = taskData.fileUrl || null;
@@ -505,7 +551,8 @@ export default function AdminArea({ user, touren, onLogout }) {
             </div>
             <div className="space-y-1">
               <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2 px-4">Internes Team</p>
-              <button onClick={() => setAdminSubView('team')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'team' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Users size={14}/> Team</button>
+              <button onClick={() => setAdminSubView('team')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'team' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Users size={14}/> Team / Bergführer</button>
+              <button onClick={() => setAdminSubView('material')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'material' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><FileText size={14}/> Ausrüstung & Material</button>
               <button onClick={() => setAdminSubView('aufgaben')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'aufgaben' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Kanban size={14}/> Aufgaben</button>
               <button onClick={() => setAdminSubView('dokumente')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'dokumente' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Folder size={14}/> Dokumente</button>
               <button onClick={() => setAdminSubView('protokolle')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'protokolle' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><BookOpen size={14}/> Protokolle & Ideen</button>
@@ -566,7 +613,10 @@ export default function AdminArea({ user, touren, onLogout }) {
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <h3 className="serif text-3xl italic">Internes Team & Bergführer</h3>
-                        <button onClick={() => setEditingTeamMember({ name: '', title: 'BERGFÜHRER IVBV', desc: '', superkraft: '', schwaeche: '', snack: '', zitat: '', visible: true })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neues Profil erstellen</button>
+                        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                            <button onClick={() => setShowTeamAttributesModal(true)} className="flex-1 md:flex-none justify-center border border-zinc-300 p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50 transition"><Settings size={14}/> Steckbrief-Felder anpassen</button>
+                            <button onClick={() => setEditingTeamMember({ name: '', title: 'BERGFÜHRER IVBV', desc: '', visible: true })} className="flex-1 md:flex-none justify-center bg-black text-white p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition shadow-md"><Plus size={14}/> Neues Profil</button>
+                        </div>
                     </div>
 
                     {editingTeamMember ? (
@@ -605,7 +655,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                             <button 
                                                 type="button" 
                                                 onClick={() => {
-                                                    const newImages = [...(editingTeamMember.images || [editingTeamMember.image])];
+                                                    const newImages = [...(editingTeamMember.images || (editingTeamMember.image ? [editingTeamMember.image] : []))];
                                                     newImages.splice(idx, 1);
                                                     setEditingTeamMember({...editingTeamMember, images: newImages});
                                                 }}
@@ -633,10 +683,16 @@ export default function AdminArea({ user, touren, onLogout }) {
                             </div>
                             
                             <div className="grid md:grid-cols-2 gap-8 pt-4 border-t border-zinc-200">
-                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Superkraft</label><textarea name="superkraft" defaultValue={editingTeamMember.superkraft} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" /></div>
-                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kryptonit / Schwäche</label><textarea name="schwaeche" defaultValue={editingTeamMember.schwaeche} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" /></div>
-                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Touren-Snack</label><textarea name="snack" defaultValue={editingTeamMember.snack} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" /></div>
-                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Lebensmotto / Zitat</label><textarea name="zitat" defaultValue={editingTeamMember.zitat} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" /></div>
+                                {activeTeamAttributes.map(attr => (
+                                    <div key={attr}>
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{attr}</label>
+                                        <textarea 
+                                            name={`custom_${attr}`} 
+                                            defaultValue={editingTeamMember.customFields?.[attr] || getLegacyTeamField(editingTeamMember, attr)} 
+                                            className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" 
+                                        />
+                                    </div>
+                                ))}
                             </div>
 
                             <div className="flex flex-col-reverse sm:flex-row justify-end gap-4 pt-8 border-t border-zinc-200">
@@ -648,11 +704,11 @@ export default function AdminArea({ user, touren, onLogout }) {
                         <div className="space-y-4 fade-in">
                             <p className="text-sm text-zinc-500 mb-8">Verwalte hier die Personen in eurem Team. Sichtbare Profile erscheinen im "Kollektiv" auf der Webseite. Alle Namen stehen zudem in den Dropdowns für "Zuständig" bei Aufgaben und Anfragen zur Verfügung.</p>
                             
-                            {activeTeamProfiles.map(member => (
+                            {teamProfiles.map(member => (
                                 <div key={member.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
                                     <div className="flex items-center gap-6">
                                         <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-100 flex-shrink-0">
-                                            {member.images || member.image ? <img src={(member.images || [member.image])[0]} className="w-full h-full object-cover" alt="" /> : <User className="w-full h-full p-3 text-zinc-300"/>}
+                                            {(member.images || member.image) ? <img src={(member.images || [member.image])[0]} className="w-full h-full object-cover" alt="" /> : <User className="w-full h-full p-3 text-zinc-300"/>}
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center flex-wrap gap-2">
@@ -668,8 +724,58 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     </div>
                                 </div>
                             ))}
+                            {teamProfiles.length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine Teammitglieder in der Datenbank.</p>}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* NEU: MATERIAL MANAGER ADMIN */}
+            {adminSubView === 'material' && (
+                <div className="fade-in max-w-6xl mx-auto w-full">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                        <h3 className="serif text-3xl italic">Ausrüstung & Materiallisten</h3>
+                    </div>
+                    <p className="text-sm text-zinc-500 mb-8 max-w-3xl">Lade hier verschiedene Ausrüstungs-PDFs (z.B. "Packliste Skitour", "Packliste Klettern") hoch. Diese kannst du anschliessend bei der Touren-Erstellung direkt verlinken.</p>
+
+                    <div className="grid md:grid-cols-12 gap-8">
+                        <div className="md:col-span-5 lg:col-span-4">
+                            <form onSubmit={saveMaterialList} className="bg-zinc-50 border border-zinc-200 p-6 shadow-sm space-y-6">
+                                <h4 className="text-[11px] font-bold uppercase tracking-widest border-b border-zinc-200 pb-3">Neue Liste hochladen</h4>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Name der Liste</label>
+                                    <input name="name" required placeholder="z.B. Packliste Hochtouren Sommer" className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">PDF Datei auswählen</label>
+                                    <input type="file" accept=".pdf" name="file" required className="w-full text-sm cursor-pointer border border-zinc-300 bg-white p-2" />
+                                </div>
+                                <button type="submit" disabled={isUploading} className="w-full bg-black text-white px-6 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">
+                                    {isUploading ? 'Wird hochgeladen...' : 'Liste Speichern'}
+                                </button>
+                            </form>
+                        </div>
+                        <div className="md:col-span-7 lg:col-span-8">
+                            <div className="space-y-3">
+                                {materialLists.map(list => (
+                                    <div key={list.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-4 md:p-5 border border-zinc-200 bg-white hover:border-black transition group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-zinc-100 text-zinc-400 rounded-sm flex-shrink-0"><FileText size={20}/></div>
+                                            <div>
+                                                <p className="font-bold text-sm">{list.name}</p>
+                                                <p className="text-[9px] uppercase tracking-widest text-zinc-400">{list.createdAt ? new Date(list.createdAt).toLocaleDateString('de-CH') : ''}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 border-t sm:border-0 border-zinc-100 pt-3 sm:pt-0">
+                                            <a href={list.url} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase tracking-widest hover:text-black text-zinc-500 transition flex items-center gap-2"><ExternalLink size={14}/> PDF</a>
+                                            <button onClick={() => deleteMaterialList(list.id, list.name)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 transition flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {materialLists.length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine Materiallisten vorhanden.</p>}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -998,8 +1104,25 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <div className="flex-1 border-2 border-dashed border-zinc-300 bg-zinc-50 hover:bg-zinc-100 hover:border-black transition cursor-pointer flex flex-col justify-center items-center relative min-h-[8rem] p-6 group">
                                     <UploadCloud size={28} className="text-zinc-400 mb-3 group-hover:text-black transition" />
                                     <span className="text-xs font-bold uppercase tracking-widest text-zinc-600 group-hover:text-black transition">Weitere Bilder hinzufügen</span>
-                                    <span className="text-[9px] text-zinc-500 mt-2 uppercase tracking-widest text-center leading-relaxed">Klicken oder Dateien hineinziehen<br/>(Mehrfachauswahl möglich - Bilder werden der Liste hinzugefügt)</span>
+                                    <span className="text-[9px] text-zinc-500 mt-2 uppercase tracking-widest text-center leading-relaxed">Klicken oder Dateien hineinziehen<br/>(Mehrfachauswahl möglich)</span>
                                     <input type="file" name="tour_files" accept="image/*" multiple className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                </div>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-8 pt-6 border-t border-zinc-200">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Voraussichtliche Leitung (Guide)</label>
+                                    <select name="guide" defaultValue={editingTour.guide || ''} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
+                                        <option value="">-- Nicht festgelegt --</option>
+                                        {teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Materialliste (PDF) verknüpfen</label>
+                                    <select name="material_list_id" defaultValue={editingTour.materialListId || ''} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
+                                        <option value="">-- Keine Liste verknüpft --</option>
+                                        {materialLists.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    </select>
                                 </div>
                             </div>
 
@@ -1041,9 +1164,15 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Programm & Ablauf</label><textarea name="ablauf" defaultValue={editingTour.ablauf} className="w-full border border-zinc-300 p-4 text-sm h-64 resize-y mt-2 outline-none focus:border-black transition" /></div>
                             </div>
                             <div>
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Spezifisches Material (ergänzend zum PDF)</label>
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Spezifisches Material (Ergänzend zum PDF)</label>
                                 <textarea name="material" defaultValue={editingTour.material} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" />
                             </div>
+
+                            <div className="pt-6 border-t border-zinc-200 md:col-span-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2 mb-2"><Lock size={14}/> Interne Bemerkungen (Nur für Admin sichtbar)</label>
+                                <textarea name="interneNotizen" defaultValue={editingTour.interneNotizen} placeholder="Z.B. Reservationsstatus, versteckte Infos, Bemerkungen für den Guide..." className="w-full border border-zinc-300 bg-[#fffdf0] p-4 text-sm h-24 resize-y outline-none focus:border-black transition" />
+                            </div>
+
                             <div className="flex flex-col-reverse sm:flex-row justify-end gap-4 pt-8 border-t border-zinc-200">
                                 <button type="button" onClick={() => setEditingTour(null)} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
                                 <button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition text-center">{isUploading ? 'Lädt...' : 'Tour Speichern'}</button>
@@ -1069,6 +1198,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                             <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 text-[8px] rounded-sm">{getKat(t)}</span>
                                             {t.isExample === true && <span className="text-blue-500 bg-blue-50 px-2 py-0.5 text-[8px]">[BEISPIELTOUR]</span>}
                                             {t.visible === false && <span className="text-red-500 bg-red-50 px-2 py-0.5 text-[8px]">[VERSTECKT]</span>}
+                                            {t.interneNotizen && <span className="text-amber-600 bg-amber-50 px-2 py-0.5 text-[8px] flex items-center gap-1"><Lock size={10}/> NOTIZ</span>}
                                         </p>
                                         <p className="text-xs text-zinc-500">{t.date || 'Kein Datum'} — Level T{getTech(t)}/A{getAusd(t)}</p>
                                     </div>
@@ -1279,6 +1409,26 @@ export default function AdminArea({ user, touren, onLogout }) {
       </div>
 
       {/* --- MODALS SETTINGS --- */}
+
+      {showTeamAttributesModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+            <div className="bg-white p-5 md:p-10 w-full max-w-sm shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">Steckbrief-Felder</h3><button onClick={() => setShowTeamAttributesModal(false)} className="hover:text-red-500 transition p-2"><X/></button></div>
+                <div className="space-y-3 mb-8 max-h-[50vh] overflow-y-auto">
+                    {activeTeamAttributes.map((k, i) => (
+                        <div key={i} className="flex justify-between items-center p-4 bg-zinc-50 border border-zinc-200 text-xs font-bold uppercase tracking-widest">
+                            {k}
+                            <button onClick={() => setDoc(doc(db, 'settings', 'team_attributes'), { labels: activeTeamAttributes.filter(item => item !== k) }, { merge: true })} className="text-zinc-300 hover:text-red-500 transition"><Trash2 size={16}/></button>
+                        </div>
+                    ))}
+                </div>
+                <form onSubmit={e => { e.preventDefault(); const v=e.target.k.value.trim(); if(v && !activeTeamAttributes.includes(v)) { setDoc(doc(db, 'settings', 'team_attributes'), { labels: [...activeTeamAttributes, v] }, { merge: true }); e.target.k.value=''; } }} className="flex gap-2">
+                    <input name="k" placeholder="Neues Feld..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition w-full"/>
+                    <button className="bg-black text-white px-4 md:px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
+                </form>
+            </div>
+        </div>
+      )}
       
       {showDocKategorienModal && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
@@ -1375,178 +1525,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                 <form onSubmit={e => { e.preventDefault(); const v=e.target.k.value.trim(); if(v && !protocolKategorien.includes(v)) { setDoc(doc(db, 'settings', 'protokolle'), { kategorien: [...protocolKategorien, v] }, { merge: true }); e.target.k.value=''; } }} className="flex gap-2">
                     <input name="k" placeholder="Neue Kategorie..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition w-full"/>
                     <button className="bg-black text-white px-4 md:px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
-                </form>
-            </div>
-        </div>
-      )}
-
-      {/* --- BEARBEITUNGS MODALS --- */}
-      {editingTask && (
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-5 md:p-10 w-full max-w-3xl max-h-[95vh] overflow-y-auto shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-200 pb-6">
-                    <h3 className="serif text-2xl md:text-3xl italic">{editingTask.id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}</h3>
-                    <button onClick={() => setEditingTask(null)} className="text-zinc-400 hover:text-black transition-colors bg-zinc-100 p-2 rounded-full"><X size={20}/></button>
-                </div>
-                <form onSubmit={(e) => { e.preventDefault(); saveTask(editingTask, e.target.file.files[0]); }} className="space-y-8">
-                    <div>
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel der Aufgabe</label>
-                        <input required value={editingTask.title} onChange={e => setEditingTask({...editingTask, title: e.target.value})} placeholder="Kurzer, prägnanter Titel" className="w-full border-b-2 border-zinc-200 p-3 outline-none mt-2 text-lg md:text-xl focus:border-black transition" />
-                    </div>
-                    
-                    <div>
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Beschreibung & Details</label>
-                        <textarea value={editingTask.description || ''} onChange={e => setEditingTask({...editingTask, description: e.target.value})} placeholder="Was genau muss gemacht werden?" rows="6" className="w-full border border-zinc-300 p-4 md:p-5 text-base mt-3 resize-y bg-zinc-50 focus:bg-white transition-colors outline-none focus:border-black" />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 pt-6 border-t border-zinc-100">
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Status</label>
-                            <select value={editingTask.status} onChange={e => setEditingTask({...editingTask, status: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer">{KANBAN_COLUMNS.map(c => <option key={c}>{c}</option>)}</select>
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Label / Kategorie</label>
-                            <select value={editingTask.category} onChange={e => setEditingTask({...editingTask, category: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer">
-                                {taskKategorien.length === 0 && <option value="">- Leer -</option>}
-                                {taskKategorien.map(c => <option key={c}>{c}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Zuständig</label>
-                            <select value={editingTask.assignee || ''} onChange={e => setEditingTask({...editingTask, assignee: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer"><option value="">-- Frei --</option>{teamMemberNames.map(a => <option key={a}>{a}</option>)}</select>
-                        </div>
-                    </div>
-                    
-                    <div className="pt-6 border-t border-zinc-100">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Dateianhang</label>
-                        <div className="mt-3 border border-zinc-300 p-4 md:p-6 bg-zinc-50 flex flex-col md:flex-row items-center justify-between gap-4">
-                            <input type="file" name="file" className="text-sm cursor-pointer w-full md:w-auto" />
-                            {editingTask.fileUrl && <a href={editingTask.fileUrl} target="_blank" rel="noreferrer" className="w-full md:w-auto text-[10px] uppercase font-bold text-blue-600 hover:text-blue-800 hover:underline flex justify-center items-center gap-2 bg-white px-4 py-2 border border-zinc-200"><ExternalLink size={14}/> Bisherige Datei öffnen</a>}
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col-reverse md:flex-row justify-between items-center pt-8 border-t border-zinc-200 gap-4">
-                        {editingTask.id ? <button type="button" onClick={() => { if(confirm('Aufgabe sicher löschen?')) { deleteDoc(doc(db,'tasks',editingTask.id)); logAction(`Aufgabe gelöscht: ${editingTask.title}`); setEditingTask(null); } }} className="w-full md:w-auto justify-center text-red-500 font-bold text-[10px] uppercase tracking-widest hover:text-red-700 hover:bg-red-50 px-4 py-3 transition flex items-center gap-2"><Trash2 size={16}/> Aufgabe löschen</button> : <div/>} 
-                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                            <button type="button" onClick={() => setEditingTask(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
-                            <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading ? 'Speichert...' : 'Aufgabe speichern'}</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-      )}
-
-      {editingDoc && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-5 md:p-10 w-full max-w-2xl shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">{editingDoc.id ? 'Dokument bearbeiten' : 'Dokument(e) Upload'}</h3><button onClick={() => setEditingDoc(null)} className="hover:text-red-500 transition p-2"><X/></button></div>
-                <form onSubmit={saveDoc} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Ordner (Hauptkategorie)</label>
-                            <select name="category" value={editingDoc.category} onChange={e => setEditingDoc({...editingDoc, category: e.target.value, subcategory: ''})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-2 bg-white cursor-pointer outline-none focus:border-black transition">
-                                {docKategorien.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Unterkategorie (optional)</label>
-                            <select name="subcategory" value={editingDoc.subcategory || ''} onChange={e => setEditingDoc({...editingDoc, subcategory: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-2 bg-white cursor-pointer outline-none focus:border-black transition">
-                                <option value="">-- Keine --</option>
-                                {(docSubkategorien[editingDoc.category] || []).map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                    
-                    {!editingDoc.id ? (
-                        <>
-                            <div className="pt-4 border-t border-zinc-100">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex gap-4 items-center mb-4"><span className="flex items-center gap-2"><input type="radio" checked={!editingDoc.isLink} onChange={() => setEditingDoc({...editingDoc, isLink: false})} className="w-4 h-4 accent-black cursor-pointer"/> Dateiupload (Drag & Drop)</span><span className="flex items-center gap-2"><input type="radio" checked={editingDoc.isLink} onChange={() => setEditingDoc({...editingDoc, isLink: true})} className="w-4 h-4 accent-black cursor-pointer"/> Web-Link</span></label>
-                                
-                                {editingDoc.isLink ? (
-                                    <div className="space-y-4">
-                                        <input name="name" required placeholder="Name des Links" className="w-full border border-zinc-300 p-4 text-sm outline-none focus:border-black transition" />
-                                        <input name="url" type="url" required placeholder="https://..." className="w-full border border-zinc-300 p-4 text-sm outline-none focus:border-black transition" />
-                                    </div>
-                                ) : (
-                                    <div 
-                                        onDragOver={e => { e.preventDefault(); setDragActive(true); }}
-                                        onDragLeave={() => setDragActive(false)}
-                                        onDrop={e => { e.preventDefault(); setDragActive(false); setUploadFiles(Array.from(e.dataTransfer.files)); }}
-                                        className={`border-2 border-dashed p-6 md:p-10 text-center transition-colors ${dragActive ? 'border-black bg-zinc-100' : 'border-zinc-300 bg-zinc-50 hover:bg-zinc-100'}`}
-                                    >
-                                        <div className="flex flex-col items-center justify-center space-y-4 cursor-pointer relative">
-                                            <UploadCloud size={32} className="text-zinc-400" />
-                                            {uploadFiles.length > 0 ? (
-                                                <p className="text-sm font-bold text-black">{uploadFiles.length} Datei(en) ausgewählt:<br/><span className="text-xs font-normal text-zinc-500 mt-2 block break-all">{uploadFiles.map(f=>f.name).join(', ')}</span></p>
-                                            ) : (
-                                                <p className="text-xs text-zinc-500 uppercase tracking-widest leading-relaxed">Dateien hierhin ziehen oder<br className="md:hidden"/> auf das Feld tippen</p>
-                                            )}
-                                            <input type="file" multiple onChange={e => setUploadFiles(Array.from(e.target.files))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="pt-4 border-t border-zinc-100 space-y-4">
-                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Dateiname / Titel</label><input name="name" required value={editingDoc.name} onChange={e => setEditingDoc({...editingDoc, name: e.target.value})} className="w-full border-b border-zinc-300 p-3 outline-none mt-1 focus:border-black transition text-lg" /></div>
-                            {editingDoc.isLink && <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Web-Link URL</label><input name="url" type="url" required value={editingDoc.url} onChange={e => setEditingDoc({...editingDoc, url: e.target.value})} className="w-full border border-zinc-300 p-4 mt-2 text-sm outline-none focus:border-black transition" /></div>}
-                        </div>
-                    )}
-
-                    <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 gap-4">
-                        {editingDoc.id ? <button type="button" onClick={() => { if(confirm('Wirklich löschen?')) { deleteDoc(doc(db,'docs',editingDoc.id)); logAction(`Dokument gelöscht: ${editingDoc.name}`); setEditingDoc(null); } }} className="text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline text-center w-full md:w-auto py-2">Löschen</button> : <div/>} 
-                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                            <button type="button" onClick={() => { setEditingDoc(null); setUploadFiles([]); }} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
-                            <button type="submit" disabled={isUploading || (!editingDoc.id && !editingDoc.isLink && uploadFiles.length === 0)} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl disabled:bg-zinc-300 text-center">{isUploading?'Lädt...':'Speichern'}</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-      )}
-      
-      {editingProtocol && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-5 md:p-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl md:text-3xl italic">{editingProtocol.id?'Eintrag bearbeiten':'Neuer Eintrag'}</h3><button onClick={() => setEditingProtocol(null)} className="hover:text-red-500 transition p-2"><X/></button></div>
-                <form onSubmit={(e) => { e.preventDefault(); saveProtocol(editingProtocol, e.target.file?.files[0]); }} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel / Thema</label><input required value={editingProtocol.title} onChange={e => setEditingProtocol({...editingProtocol, title: e.target.value})} className="w-full border-b border-zinc-300 p-3 mt-1 outline-none text-xl focus:border-black transition" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Datum</label><input type="date" value={editingProtocol.date} onChange={e => setEditingProtocol({...editingProtocol, date: e.target.value})} className="w-full border-b border-zinc-300 p-3 mt-1 outline-none text-lg focus:border-black transition" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kategorie</label><select value={editingProtocol.category} onChange={e => setEditingProtocol({...editingProtocol, category: e.target.value})} className="w-full border border-zinc-300 p-4 mt-2 outline-none text-xs uppercase tracking-widest bg-white cursor-pointer focus:border-black transition">{protocolKategorien.map(c => <option key={c}>{c}</option>)}</select></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Teilnehmer</label><input value={editingProtocol.participants || ''} onChange={e => setEditingProtocol({...editingProtocol, participants: e.target.value})} placeholder="Adrian, Jens..." className="w-full border border-zinc-300 p-4 mt-2 outline-none text-sm focus:border-black transition" /></div>
-                    </div>
-                    
-                    <div className="pt-4"><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Diskutierte Notizen / Details</label><textarea value={editingProtocol.notes || ''} onChange={e => setEditingProtocol({...editingProtocol, notes: e.target.value})} rows="6" className="w-full border border-zinc-300 p-4 md:p-5 mt-2 outline-none text-sm bg-zinc-50 focus:bg-white resize-y focus:border-black transition" /></div>
-                    
-                    <div className="pt-6 border-t border-zinc-200">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block mb-4">Beschlüsse & To-Dos aus dem Meeting</label>
-                        <div className="space-y-3">
-                            {editingProtocol.decisions.map((d, i) => (
-                                <div key={i} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-zinc-50 p-4 border border-zinc-200">
-                                    <div className="w-full sm:flex-1"><label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Beschluss / To-Do</label><input value={d.text} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].text = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} placeholder="Was wird gemacht?" className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition" /></div>
-                                    <div className="w-full sm:w-48 flex gap-2 items-end">
-                                        <div className="flex-1">
-                                            <label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Wer machts?</label>
-                                            <select value={d.assignee || ''} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].assignee = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition bg-white"><option value="">Zuständig...</option>{teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}</select>
-                                        </div>
-                                        <button type="button" onClick={() => { const nd = [...editingProtocol.decisions]; nd.splice(i,1); setEditingProtocol({...editingProtocol, decisions: nd}); }} className="text-zinc-400 hover:text-red-500 p-3 transition bg-white border border-zinc-300 sm:border-0 sm:bg-transparent flex-shrink-0"><Trash2 size={18}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <button type="button" onClick={() => setEditingProtocol({...editingProtocol, decisions: [...editingProtocol.decisions, {text: '', assignee: ''}]})} className="mt-4 bg-zinc-100 text-black px-6 py-3 text-[9px] uppercase tracking-widest font-bold hover:bg-zinc-200 transition w-full sm:w-auto">+ Neuen Beschluss hinzufügen</button>
-                    </div>
-
-                    <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 mt-8 gap-4">
-                        {editingProtocol.id ? <button type="button" onClick={() => { if(confirm('Eintrag komplett löschen?')) { deleteDoc(doc(db,'protocols',editingProtocol.id)); logAction(`Protokoll gelöscht: ${editingProtocol.title}`); setEditingProtocol(null); } }} className="w-full md:w-auto justify-center text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline flex items-center gap-2 py-2"><Trash2 size={14}/> Löschen</button> : <div/>} 
-                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                            <button type="button" onClick={() => setEditingProtocol(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
-                            <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading?'Speichert...':'Speichern'}</button>
-                        </div>
-                    </div>
                 </form>
             </div>
         </div>

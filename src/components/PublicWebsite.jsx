@@ -35,42 +35,6 @@ const Instagram = (props) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
 );
 
-const TEAM_FALLBACK = [
-    { 
-        name: "ADRIAN BÜSCHLEN", 
-        title: "BERGFÜHRER IVBV", 
-        desc: "Skifanatiker und Bergführer aus Leidenschaft. Liebt steile Flanken und technische Grate.", 
-        image: "/adrian.jpg",
-        superkraft: "Findet im dichtesten Nebel zielsicher die Kaffeemaschine der Hütte.",
-        schwaeche: "Wird 'grumpy', wenn der Gipfelschnaps im Tal vergessen wurde.",
-        snack: "Getrocknete Mangos & Appenzeller Biberli",
-        zitat: "Steiler ist geiler.",
-        visible: true
-    },
-    { 
-        name: "JENS Schärer", 
-        title: "BERGFÜHRER IVBV", 
-        desc: "Spezialist für Eisklettern und winterliche Expeditionen. Sucht immer die perfekte Linie im Eis.", 
-        image: "/jens.jpg",
-        superkraft: "Hat eine eingebaute Heizspirale in den Fingern (friert nie beim Eisklettern).",
-        schwaeche: "Vergisst immer, wo er die Stirnlampe hingelegt hat (meistens auf dem Kopf).",
-        snack: "Käse. Einfach nur ein riesiges Stück Bergkäse.",
-        zitat: "Eis ist auch nur Wasser mit Haltung.",
-        visible: true
-    },
-    { 
-        name: "MATTHIAS Bettschen", 
-        title: "BERGFÜHRER IVBV", 
-        desc: "Kletterexperte im Granit und Kalk. Vermittelt Technik und Freude am Fels mit grosser Geduld.", 
-        image: "/matthias.jpg",
-        superkraft: "Findet an einer aalglatten Felswand noch einen Hook für den kleinen Zeh.",
-        schwaeche: "Kann an keiner Engadiner Dorfbäckerei vorbeigehen, ohne eine Nusstorte zu kaufen.",
-        snack: "Engadiner Nusstorte (was sonst?)",
-        zitat: "Ruhe bewahren und weiterklettern.",
-        visible: true
-    }
-];
-
 const ANGEBOT_SOMMER = [
     { id: "s1", title: "Hochtouren", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", image: "/hochtour.jpg", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen." },
     { id: "s2", title: "Alpinklettern", desc: "In den besten Granit- und Kalkwänden der Schweiz.", image: "/alpinklettern.jpg", longDesc: "Mehrseillängen-Träume in bestem Fels. Von der Furka bis ins Bergell – wir finden die perfekte Linie für dein Level." },
@@ -141,8 +105,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [bookingStatus, setBookingStatus] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Neues State für Team Profiles
     const [teamProfiles, setTeamProfiles] = useState([]);
+    const [teamAttributes, setTeamAttributes] = useState([]);
     
     const [isAllToursModalOpen, setIsAllToursModalOpen] = useState(false);
     const [isIdeenBoardOpen, setIsIdeenBoardOpen] = useState(false);
@@ -158,9 +122,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const exampleTours = touren.filter(t => t.isExample === true);
     const recentTours = visibleTours.slice(0, 3);
 
-    // Beziehe die Profile dynamisch oder verwende das Hardcoded Array als Fallback
-    const activeTeamProfiles = teamProfiles.length > 0 ? teamProfiles : TEAM_FALLBACK;
-    const visibleTeamProfiles = activeTeamProfiles.filter(t => t.visible !== false);
+    const visibleTeamProfiles = teamProfiles.filter(t => t.visible !== false);
+    const activeTeamAttributes = teamAttributes.length > 0 ? teamAttributes : ['Superkraft', 'Kryptonit', 'Touren-Snack', 'Lebensmotto'];
 
     const filteredTours = visibleTours.filter(t => {
         if (filterKategorie !== 'Alle' && getKat(t) !== filterKategorie) return false;
@@ -180,17 +143,19 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
     
-    // Team Profile laden
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'team_profiles'), snap => {
+        const unsub1 = onSnapshot(collection(db, 'team_profiles'), snap => {
             setTeamProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
-        return () => unsub();
+        const unsub2 = onSnapshot(doc(db, 'settings', 'team_attributes'), snap => {
+            if (snap.exists() && snap.data().labels) setTeamAttributes(snap.data().labels);
+        });
+        return () => { unsub1(); unsub2(); };
     }, []);
 
     useEffect(() => {
-        if (selectedTour || selectedTeamMember) setHasScrolledGallery(false);
-    }, [selectedTour, selectedTeamMember]);
+        if (selectedTour || selectedTeamMember || selectedAngebot) setHasScrolledGallery(false);
+    }, [selectedTour, selectedTeamMember, selectedAngebot]);
 
     useEffect(() => {
         if (window.matchMedia("(hover: hover)").matches) return;
@@ -217,12 +182,11 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         return () => observer.disconnect();
     }, [touren, teamProfiles, angebotTab, isAllToursModalOpen, isIdeenBoardOpen]);
 
-    // Tastatur-Navigation in der Desktop Lightbox
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (isLightboxOpen === null || (!selectedTour && !selectedTeamMember)) return;
             const activeItem = selectedTour || selectedTeamMember;
-            const imgs = activeItem.images || [activeItem.image];
+            const imgs = activeItem.images || (activeItem.image ? [activeItem.image] : []);
             if (imgs.length <= 1) return;
             if (e.key === 'ArrowRight') setIsLightboxOpen((prev) => (prev + 1) % imgs.length);
             else if (e.key === 'ArrowLeft') setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length);
@@ -232,7 +196,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isLightboxOpen, selectedTour, selectedTeamMember]);
 
-    // Automatisches Scrollen im Mobile-Galeriemodus zur angeklickten Bild-ID
     useEffect(() => {
         if (isLightboxOpen !== null && window.innerWidth < 768) {
             setHasScrolledGallery(false);
@@ -243,7 +206,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         }
     }, [isLightboxOpen]);
 
-    // Allgemeine Anfrage (Angebote)
     const handleAnfrage = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
@@ -267,7 +229,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         } catch (err) { alert("Fehler beim Senden der Anfrage. Bitte versuche es später erneut."); }
     };
 
-    // Anfrage für Beispieltouren (Ideenpool)
     const handleIdeaInquiry = async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
@@ -283,13 +244,10 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         try {
             await addDoc(collection(db, 'anfragen'), data);
             const emailjs = await loadEmailJS();
-            
-            // Nur das normale Anfrage-E-Mail senden (keine zweckentfremdete Anmeldebestätigung)
             await emailjs.send(
                 "service_b02rsz7", "template_ewn7qhm", 
                 { vorname: data.vorname, name: data.name, email: data.email, thema: data.thema, nachricht: data.nachricht }
             );
-            
             setBookingStatus("Anfrage erfolgreich gesendet! Wir melden uns bald bei dir.");
             setTimeout(() => { setSelectedTour(null); setIsInquiryMode(false); setBookingStatus(null); setIsSubmitting(false); }, 4000);
         } catch (err) { 
@@ -298,7 +256,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         }
     };
 
-    // Normale Tourenbuchung
     const handleBooking = async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
@@ -329,6 +286,15 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             setBookingStatus("Herzlichen Dank! Die Bestätigung deiner Anmeldung ist zu dir unterwegs.");
             setTimeout(() => { setSelectedTour(null); setIsBookingMode(false); setBookingStatus(null); setIsSubmitting(false); }, 4000);
         } catch (err) { setBookingStatus("Anmeldung gespeichert, aber Mail-Versand fehlgeschlagen."); setIsSubmitting(false); }
+    };
+
+    const getLegacyTeamField = (member, attr) => {
+        if (!member) return '';
+        if (attr === 'Superkraft') return member.superkraft || '';
+        if (attr === 'Kryptonit') return member.schwaeche || '';
+        if (attr === 'Touren-Snack') return member.snack || '';
+        if (attr === 'Lebensmotto') return member.zitat || '';
+        return '';
     };
 
     return (
@@ -462,7 +428,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                             ))}
                         </div>
 
-                        {/* Button für alle Touren */}
                         <div className="mt-20 text-center">
                             <button onClick={() => setIsAllToursModalOpen(true)} className="border border-black px-12 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-black hover:text-white transition-all">
                                 Alle Touren & Filter öffnen
@@ -698,7 +663,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                MODAL FÜR ANGEBOTE (Mit Split-Screen Layout)
+                MODAL FÜR ANGEBOTE
                ========================================= */}
             {selectedAngebot && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
@@ -758,10 +723,10 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                MODAL FÜR BERGFÜHRER (Mit Split-Screen Layout)
+                MODAL FÜR BERGFÜHRER
                ========================================= */}
             {selectedTeamMember && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
+                <div className="fixed inset-0 z-[300] flex items-center justify-center md:p-8">
                     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedTeamMember(null)}></div>
                     
                     <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
@@ -801,22 +766,16 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line mb-8">{selectedTeamMember.desc}</p>
                                 
                                 <div className="space-y-6 pt-4 border-t border-zinc-100 flex-1">
-                                    <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                        <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Superkraft</span>
-                                        <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.superkraft}</span>
-                                    </div>
-                                    <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                        <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Kryptonit</span>
-                                        <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.schwaeche}</span>
-                                    </div>
-                                    <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                        <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Touren-Snack</span>
-                                        <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.snack}</span>
-                                    </div>
-                                    <div className="grid grid-cols-12 gap-4">
-                                        <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Lebensmotto</span>
-                                        <span className="col-span-12 md:col-span-8 text-xs italic text-zinc-700 leading-relaxed">"{selectedTeamMember.zitat}"</span>
-                                    </div>
+                                    {activeTeamAttributes.map(attr => {
+                                        const val = selectedTeamMember.customFields?.[attr] || getLegacyTeamField(selectedTeamMember, attr);
+                                        if (!val) return null;
+                                        return (
+                                            <div key={attr} className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                                <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">{attr}</span>
+                                                <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed whitespace-pre-line">{val}</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -885,7 +844,24 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
                                                 {(!selectedTour.isExample || selectedTour.date) && (
                                                     <Accordion title="Datum & Durchführung">
-                                                        <div className="text-zinc-600 font-light text-sm pb-2">{selectedTour.date || 'Auf Anfrage'}</div>
+                                                        <div className="text-zinc-600 font-light text-sm pb-2">
+                                                            {selectedTour.date || 'Auf Anfrage'}
+                                                            {selectedTour.guide && (
+                                                                <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center gap-2">
+                                                                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Voraussichtliche Leitung:</span>
+                                                                    <button 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const guideProfile = teamProfiles.find(p => p.name === selectedTour.guide);
+                                                                            if (guideProfile) setSelectedTeamMember(guideProfile);
+                                                                        }} 
+                                                                        className="font-bold underline hover:text-black text-zinc-600 transition-colors text-xs"
+                                                                    >
+                                                                        {selectedTour.guide}
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </Accordion>
                                                 )}
 
@@ -926,7 +902,15 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 <div className="grid md:grid-cols-2 gap-6 pt-4">
                                                     <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
                                                         <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-3">Material</p>
-                                                        <a href="/packliste.pdf" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-zinc-500 mb-4 underline underline-offset-4"><FileText size={16}/> Material gemäss PDF</a>
+                                                        {selectedTour.materialUrl ? (
+                                                            <a href={selectedTour.materialUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-zinc-500 mb-4 underline underline-offset-4">
+                                                                <FileText size={16}/> {selectedTour.materialName || 'Material gemäss PDF'}
+                                                            </a>
+                                                        ) : (
+                                                            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400 mb-4">
+                                                                <FileText size={16}/> Keine Liste hinterlegt
+                                                            </span>
+                                                        )}
                                                         <p className="text-xs text-zinc-500 italic leading-relaxed whitespace-pre-line">{selectedTour.material || 'Keine speziellen Ergänzungen.'}</p>
                                                     </div>
                                                     <div className="p-6 bg-[#f9f9f7] border border-zinc-100 flex flex-col justify-center">
@@ -1026,14 +1010,14 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 const imgs = activeItem.images || (activeItem.image ? [activeItem.image] : []);
                 
                 return (
-                <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center fade-in">
+                <div className="fixed inset-0 z-[400] bg-black flex items-center justify-center fade-in">
                     <div className="absolute inset-0" onClick={() => setIsLightboxOpen(null)}></div>
-                    <button onClick={() => setIsLightboxOpen(null)} className="absolute top-4 right-4 md:top-8 md:right-8 text-white text-4xl md:text-5xl z-[350] w-12 h-12 flex items-center justify-center bg-black/40 rounded-full md:bg-transparent md:w-auto md:h-auto">&times;</button>
+                    <button onClick={() => setIsLightboxOpen(null)} className="absolute top-4 right-4 md:top-8 md:right-8 text-white text-4xl md:text-5xl z-[450] w-12 h-12 flex items-center justify-center bg-black/40 rounded-full md:bg-transparent md:w-auto md:h-auto">&times;</button>
                     
                     {/* --- MOBILE GALLERY (Native Scroll) --- */}
-                    <div className="md:hidden absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar items-center z-[310]" onScroll={() => setHasScrolledGallery(true)}>
+                    <div className="md:hidden absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar items-center z-[410]" onScroll={() => setHasScrolledGallery(true)}>
                         {(!hasScrolledGallery && imgs.length > 1) && (
-                            <div className="absolute inset-0 z-[350] flex items-center justify-center pointer-events-none">
+                            <div className="absolute inset-0 z-[450] flex items-center justify-center pointer-events-none">
                                 <div className="bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full text-xs uppercase tracking-widest flex items-center gap-3 animate-swipe-hint">
                                     <Hand size={18}/> Bilder wischen
                                 </div>
@@ -1049,19 +1033,19 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     {/* --- DESKTOP GALLERY (Arrows) --- */}
                     {(() => {
                         if (imgs.length <= 1) return (
-                            <div className="hidden md:flex relative max-w-full max-h-full items-center justify-center z-[310] p-12 pointer-events-none">
+                            <div className="hidden md:flex relative max-w-full max-h-full items-center justify-center z-[410] p-12 pointer-events-none">
                                 <img src={imgs[0]} className="max-w-full max-h-full object-contain shadow-2xl" alt="" />
                             </div>
                         );
                         return (
-                            <div className="hidden md:flex absolute inset-0 items-center justify-center z-[310]">
+                            <div className="hidden md:flex absolute inset-0 items-center justify-center z-[410]">
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }} 
-                                    className="absolute left-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[320]"
+                                    className="absolute left-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[420]"
                                 >&#8249;</button>
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }} 
-                                    className="absolute right-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[320]"
+                                    className="absolute right-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[420]"
                                 >&#8250;</button>
                                 <img 
                                     src={imgs[isLightboxOpen]} 
