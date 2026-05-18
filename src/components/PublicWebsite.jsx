@@ -109,6 +109,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [teamProfiles, setTeamProfiles] = useState([]);
     const [teamAttributes, setTeamAttributes] = useState([]);
     const [angebote, setAngebote] = useState([]);
+    const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [] });
     
     const [isAllToursModalOpen, setIsAllToursModalOpen] = useState(false);
     const [isIdeenBoardOpen, setIsIdeenBoardOpen] = useState(false);
@@ -120,17 +121,29 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     const [hasScrolledGallery, setHasScrolledGallery] = useState(false);
 
-    const visibleTours = touren.filter(t => t.visible !== false && t.isExample !== true);
-    const exampleTours = touren.filter(t => t.isExample === true);
+    const [activeHeroVideo, setActiveHeroVideo] = useState('/hero-video.mp4');
+
+    useEffect(() => {
+        if (websiteSettings.heroVideos && websiteSettings.heroVideos.length > 0) {
+            const randomVideo = websiteSettings.heroVideos[Math.floor(Math.random() * websiteSettings.heroVideos.length)];
+            setActiveHeroVideo(randomVideo);
+        } else {
+            setActiveHeroVideo('/hero-video.mp4');
+        }
+    }, [websiteSettings]);
+
+    const visibleTours = touren.filter(t => t.visible !== false && t.isExample !== true && !t.isDeleted);
+    const exampleTours = touren.filter(t => t.isExample === true && !t.isDeleted);
     const recentTours = visibleTours.slice(0, 3);
 
-    const activeAngebote = angebote.length > 0 ? angebote : DEFAULT_ANGEBOTE;
-    const sommerAngebote = activeAngebote.filter(a => a.season === 'Sommer');
-    const winterAngebote = activeAngebote.filter(a => a.season === 'Winter');
-    const tourKategorien = [...new Set(activeAngebote.map(a => a.title))];
+    const activeAngebote = angebote.filter(a => !a.isDeleted);
+    const activeAngeboteFallback = activeAngebote.length > 0 ? activeAngebote : DEFAULT_ANGEBOTE;
+    
+    const sommerAngebote = activeAngeboteFallback.filter(a => a.season === 'Sommer');
+    const winterAngebote = activeAngeboteFallback.filter(a => a.season === 'Winter');
+    const tourKategorien = [...new Set(activeAngeboteFallback.map(a => a.title))];
 
-    // Entfernt den Dummy-Fallback für TeamProfiles komplett! Startet ggf. leer.
-    const visibleTeamProfiles = teamProfiles.filter(t => t.visible !== false);
+    const visibleTeamProfiles = teamProfiles.filter(t => t.visible !== false && !t.isDeleted);
     const activeTeamAttributes = teamAttributes.length > 0 ? teamAttributes : ['Superkraft', 'Kryptonit', 'Touren-Snack', 'Lebensmotto'];
 
     const filteredTours = visibleTours.filter(t => {
@@ -152,7 +165,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     }, []);
     
     useEffect(() => {
-        const logError = (err) => console.error("Fehler beim Laden aus Firebase. Firestore Rules checken?", err);
+        const logError = (err) => console.error("Fehler beim Laden aus Firebase.", err);
         
         const unsub1 = onSnapshot(collection(db, 'team_profiles'), 
             snap => setTeamProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() }))), logError
@@ -163,7 +176,10 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         const unsub3 = onSnapshot(collection(db, 'angebote'), 
             snap => setAngebote(snap.docs.map(d => ({ id: d.id, ...d.data() }))), logError
         );
-        return () => { unsub1(); unsub2(); unsub3(); };
+        const unsub4 = onSnapshot(doc(db, 'settings', 'website'), 
+            snap => { if (snap.exists()) setWebsiteSettings(snap.data()); }, logError
+        );
+        return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
     }, []);
 
     useEffect(() => {
@@ -375,8 +391,9 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 z-0 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}>
                         <span className="text-xs md:text-sm uppercase tracking-[0.4em] text-zinc-300 font-bold">Berg Kollektiv</span>
                     </div>
-                    <video autoPlay muted loop playsInline preload="auto" onCanPlay={() => setIsVideoLoaded(true)} onLoadedData={() => setIsVideoLoaded(true)} className={`absolute inset-0 w-full h-full object-cover grayscale transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-60' : 'opacity-0'}`}>
-                        <source src="/hero-video.mp4" type="video/mp4" />
+                    {/* VIDEO WIRD NUN DYNAMISCH GELADEN */}
+                    <video key={activeHeroVideo} autoPlay muted loop playsInline preload="auto" onCanPlay={() => setIsVideoLoaded(true)} onLoadedData={() => setIsVideoLoaded(true)} className={`absolute inset-0 w-full h-full object-cover grayscale transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-60' : 'opacity-0'}`}>
+                        <source src={activeHeroVideo} type="video/mp4" />
                     </video>
                     <div className={`relative z-10 text-center text-white w-full max-w-[95vw] mx-auto mix-blend-difference transition-all duration-1000 ${isMobileMenuOpen || !isVideoLoaded ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
                         <p className="uppercase tracking-[0.6em] text-[10px] mb-8 opacity-70">Bergführer IVBV</p>
@@ -456,7 +473,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         <div className="text-center mb-24"><h2 className="serif text-4xl italic">Das Kollektiv</h2></div>
                         <div className="grid md:grid-cols-3 gap-16 md:gap-8 lg:gap-16">
                             {visibleTeamProfiles.map((member, i) => (
-                                <div key={i} onClick={() => setSelectedTeamMember(member)} className="text-center flex flex-col items-center group cursor-pointer">
+                                <div key={member.id || i} onClick={() => setSelectedTeamMember(member)} className="text-center flex flex-col items-center group cursor-pointer">
                                     <div className="team-img-container aspect-[4/5] w-full bg-zinc-100 mb-10 overflow-hidden relative">
                                         <img src={(member.images || [member.image])[0] || '/adrian.jpg'} alt={member.name} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
                                     </div>

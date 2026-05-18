@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, increment } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { 
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
   LayoutDashboard, User, Users, X, Edit, ExternalLink, Trash2, MapPin, 
-  FileText, Share2, Link as LinkIcon, UploadCloud, Lock, Layers
+  FileText, Share2, Link as LinkIcon, UploadCloud, Lock, Layers, Monitor, RotateCcw, Archive
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -25,6 +25,7 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 
 const KANBAN_COLUMNS = ['Offen', 'In Bearbeitung', 'Blockiert', 'Erledigt'];
+const ANFRAGEN_STATUS = ['Neu / Offen', 'In Bearbeitung', 'Geantwortet', 'Erfolgreich gebucht', 'Absage'];
 
 // --- BILD-KOMPRESSION HELPER ---
 const loadCompressor = () => new Promise((resolve, reject) => {
@@ -37,15 +38,10 @@ const loadCompressor = () => new Promise((resolve, reject) => {
 });
 
 const compressImage = async (file) => {
-    // Nur Bilder komprimieren, PDFs etc. ignorieren
     if (!file.type.startsWith('image/')) return file;
     try {
         const imageCompression = await loadCompressor();
-        const options = { 
-            maxSizeMB: 1,            // Max. Dateigrösse 1 MB
-            maxWidthOrHeight: 1920,  // Max. Auflösung 1920px (Full HD)
-            useWebWorker: true 
-        };
+        const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
         return await imageCompression(file, options);
     } catch (error) {
         console.error("Kompression fehlgeschlagen, lade Original hoch:", error);
@@ -57,11 +53,7 @@ const DEFAULT_ANGEBOTE = [
     { id: "mock-s1", title: "Hochtouren", season: "Sommer", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen.", image: "/hochtour.jpg" },
     { id: "mock-s2", title: "Alpinklettern", season: "Sommer", desc: "In den besten Granit- und Kalkwänden der Schweiz.", longDesc: "Mehrseillängen-Träume in bestem Fels. Von der Furka bis ins Bergell – wir finden die perfekte Linie für dein Level.", image: "/alpinklettern.jpg" },
     { id: "mock-s3", title: "Kletterkurse", season: "Sommer", desc: "Vom ersten Griff in der Halle bis zum Vorstieg im Fels.", longDesc: "Sicherheit steht an erster Stelle. Wir vermitteln dir das nötige Know-how in Seiltechnik, Standplatzbau und Vorstiegstaktik.", image: "/kletterkurs.jpg" },
-    { id: "mock-s4", title: "Gratüberschreitungen", season: "Sommer", desc: "Luftige Grate und endlose Aussichten.", longDesc: "Die eleganteste Art, einen Gipfel zu besteigen. Klassiker wie der Eiger- oder Biancograt warten auf dich.", image: "/grat.jpg" },
-    { id: "mock-w1", title: "Skitouren", season: "Winter", desc: "Unberührter Pulverschnee und einsame Gipfelerlebnisse.", longDesc: "Vom Berner Oberland bis ins Wallis – wir finden für dich den besten Powder und unverspurte Hänge fernab der Massen.", image: "/skitour.jpg" },
-    { id: "mock-w2", title: "Eisklettern", season: "Winter", desc: "Die faszinierende Welt der gefrorenen Wasserfälle.", longDesc: "Steile Eiszapfen und blaues Eis. Wir zeigen dir die richtige Schlagtechnik und den Standplatzbau.", image: "/eisklettern.jpg" },
-    { id: "mock-w3", title: "Freeriden", season: "Winter", desc: "Die besten Lines in den Alpen mit Fokus auf Sicherheit.", longDesc: "Maximale Abfahrt bei minimalem Aufstieg. Wir nutzen die Bergbahnen und zeigen dir die versteckten Runs.", image: "/freeride.jpg" },
-    { id: "mock-w4", title: "Lawinenkurse", season: "Winter", desc: "Fundiertes Wissen für deine Sicherheit im Backcountry.", longDesc: "Prävention, Beobachtung und Rettung. Ein essenzieller Kurs für alle, die sich im Winter abseits der Pisten bewegen.", image: "/lawine.jpg" }
+    { id: "mock-s4", title: "Gratüberschreitungen", season: "Sommer", desc: "Luftige Grate und endlose Aussichten.", longDesc: "Die eleganteste Art, einen Gipfel zu besteigen. Klassiker wie der Eiger- oder Biancograt warten auf dich.", image: "/grat.jpg" }
 ];
 
 const getKat = (t, defaultCats) => {
@@ -86,6 +78,7 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [teamProfiles, setTeamProfiles] = useState([]);
   const [materialLists, setMaterialLists] = useState([]);
   const [angebote, setAngebote] = useState([]);
+  const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [] });
   
   // Dynamische Settings
   const [docKategorien, setDocKategorien] = useState(['Rechnungen', 'Konzepte', 'Sponsoring', 'Bilder']);
@@ -95,8 +88,11 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [teamAttributes, setTeamAttributes] = useState([]); 
 
   const activeTeamAttributes = teamAttributes.length > 0 ? teamAttributes : ['Superkraft', 'Kryptonit', 'Touren-Snack', 'Lebensmotto'];
-  const activeAngebote = angebote.length > 0 ? angebote : DEFAULT_ANGEBOTE;
-  const tourKategorien = [...new Set(activeAngebote.map(a => a.title))];
+  
+  // Filter isDeleted = true aus, wenn es nicht der Papierkorb ist
+  const activeAngebote = angebote.filter(a => !a.isDeleted);
+  const activeAngeboteFallback = activeAngebote.length > 0 ? activeAngebote : DEFAULT_ANGEBOTE;
+  const tourKategorien = [...new Set(activeAngeboteFallback.map(a => a.title))];
 
   // UI States
   const [selectedKunde, setSelectedKunde] = useState(null);
@@ -124,6 +120,12 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [tourStatusFilter, setTourStatusFilter] = useState('Öffentlich');
   const [tourKatFilter, setTourKatFilter] = useState('Alle');
 
+  const [anfragenStatusFilter, setAnfragenStatusFilter] = useState('Alle');
+  const [anfragenSearch, setAnfragenSearch] = useState('');
+
+  const [anmeldungenView, setAnmeldungenView] = useState('active'); // active, archived
+  const [trashTab, setTrashTab] = useState('touren');
+
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]);
@@ -145,6 +147,7 @@ export default function AdminArea({ user, touren, onLogout }) {
           fetchedLogs.sort((a, b) => b.timestamp - a.timestamp); 
           setLogs(fetchedLogs);
       }),
+      onSnapshot(doc(db, 'settings', 'website'), snap => { if(snap.exists()) setWebsiteSettings(snap.data()); }),
       onSnapshot(doc(db, 'settings', 'dokumente'), snap => { 
           if (snap.exists()) {
               if (snap.data().kategorien) setDocKategorien(snap.data().kategorien); 
@@ -162,17 +165,95 @@ export default function AdminArea({ user, touren, onLogout }) {
     return () => unsubs.forEach(unsub => unsub());
   }, [user]);
 
-  const teamMemberNames = [...new Set([...teamProfiles.map(t => t.name), 'Allgemein'])];
+  const teamMemberNames = [...new Set([...teamProfiles.filter(t => !t.isDeleted).map(t => t.name), 'Allgemein'])];
 
   const logAction = async (actionText) => {
     if (!user) return;
     try {
-        await addDoc(collection(db, 'logs'), {
-            user: user.email,
-            action: actionText,
-            timestamp: Date.now()
-        });
+        await addDoc(collection(db, 'logs'), { user: user.email, action: actionText, timestamp: Date.now() });
     } catch (e) { console.error("Fehler beim Speichern des Logs", e); }
+  };
+
+  const deleteStorageFile = async (url) => {
+      if (!url || !url.includes('firebasestorage')) return;
+      try {
+          const fileRef = ref(storage, url);
+          await deleteObject(fileRef);
+      } catch (e) { console.error("Konnte Datei nicht aus dem Storage löschen:", url, e); }
+  };
+
+  // --- ANMELDUNGEN LÖSCHEN & ARCHIVIEREN ---
+  const deleteAnmeldung = async (anm, title) => {
+      if(!confirm(`Anmeldung von ${anm.vorname} ${anm.name} wirklich löschen/stornieren?`)) return;
+      try {
+          await deleteDoc(doc(db, 'anmeldungen', anm.id));
+          // Wenn die Anmeldung NICHT im Archiv war, setze die Tour-Kapazität wieder 1 rauf (angemeldet -1)
+          if (!anm.isArchived && anm.tourId && !anm.tourId.startsWith('mock-')) {
+              await updateDoc(doc(db, 'touren', anm.tourId), { angemeldet: increment(-1) });
+          }
+          logAction(`Anmeldung storniert/gelöscht: ${anm.vorname} ${anm.name} für ${title}`);
+      } catch (e) {
+          alert("Fehler beim Löschen.");
+          console.error(e);
+      }
+  };
+
+  const archiveTourBookings = async (title, teilnehmer) => {
+      if (!confirm(`Möchtest du alle aktuellen Anmeldungen für "${title}" ins Archiv verschieben?\n\nDie gebuchten Plätze bei der Tour werden dadurch wieder auf 0 gesetzt (Saison-Reset).`)) return;
+      try {
+          // Update alle Teilnehmer -> isArchived: true
+          await Promise.all(teilnehmer.map(anm => updateDoc(doc(db, 'anmeldungen', anm.id), { isArchived: true, archivedAt: Date.now() })));
+          
+          // Finde die Tour ID und setze den Zähler zurück
+          const tourId = teilnehmer[0]?.tourId;
+          if (tourId && !tourId.startsWith('mock-')) {
+              await updateDoc(doc(db, 'touren', tourId), { angemeldet: 0 });
+          }
+          
+          logAction(`Saison-Reset: Anmeldungen für "${title}" archiviert.`);
+          alert("Erfolgreich archiviert! Die Tour hat nun wieder 0 Buchungen.");
+      } catch (e) {
+          alert("Fehler beim Archivieren.");
+          console.error(e);
+      }
+  };
+
+  // --- PAPIERKORB FUNKTIONEN (Soft Delete -> Hard Delete) ---
+  const softDelete = async (colName, id, title) => {
+      if (id.startsWith('mock-')) return alert("Beispieldaten können nicht gelöscht werden.");
+      if (!confirm(`"${title}" in den Papierkorb verschieben?`)) return;
+      try {
+          await updateDoc(doc(db, colName, id), { isDeleted: true, deletedAt: Date.now() });
+          logAction(`${colName} in Papierkorb verschoben: ${title}`);
+      } catch (e) { alert("Fehler beim Löschen."); }
+  };
+
+  const restoreItem = async (colName, id, title) => {
+      try {
+          await updateDoc(doc(db, colName, id), { isDeleted: false });
+          logAction(`${colName} wiederhergestellt: ${title}`);
+      } catch (e) { alert("Fehler beim Wiederherstellen."); }
+  };
+
+  const hardDelete = async (colName, item, title) => {
+      if (!confirm(`"${title}" ENDGÜLTIG löschen?\nDas löscht auch alle dazugehörigen Dateien (Bilder/PDFs) auf dem Server und kann nicht rückgängig gemacht werden.`)) return;
+      
+      try {
+          let urls = [];
+          if (item.image) urls.push(item.image);
+          if (item.images) urls.push(...item.images);
+          if (item.url && !item.isLink) urls.push(item.url);
+          if (item.fileUrl) urls.push(item.fileUrl);
+
+          const storageUrls = urls.filter(u => u && u.includes('firebasestorage.googleapis.com'));
+          await Promise.all(storageUrls.map(u => deleteStorageFile(u)));
+
+          await deleteDoc(doc(db, colName, item.id));
+          logAction(`${colName} endgültig gelöscht: ${title}`);
+          
+      } catch (e) {
+          alert("Fehler beim endgültigen Löschen.");
+      }
   };
 
   const kundenStamm = useMemo(() => {
@@ -210,9 +291,9 @@ export default function AdminArea({ user, touren, onLogout }) {
 
   const filteredKunden = kundenStamm.filter(k => k.name.toLowerCase().includes(kundenSearch.toLowerCase()) || k.vorname.toLowerCase().includes(kundenSearch.toLowerCase()) || k.email.toLowerCase().includes(kundenSearch.toLowerCase()));
 
-  const exportToExcel = (anmeldungen) => {
-    const headers = ["Tour", "Vorname", "Name", "Email", "Telefon", "Adresse", "PLZ/Ort", "Ernaehrung", "Bemerkung", "Status", "Zuständig"];
-    const rows = anmeldungen.map(a => [ a.tourTitle, a.vorname, a.name, a.email, `'${a.phone}`, a.adresse, a.plz_ort, a.ernaehrung, (a.besonderes || "").replace(/\n/g, " "), a.status || 'Neu', a.zustaendig || 'Unzugewiesen' ]);
+  const exportToExcel = (exportData) => {
+    const headers = ["Tour", "Vorname", "Name", "Email", "Telefon", "Adresse", "PLZ/Ort", "Ernaehrung", "Bemerkung", "Status", "Zuständig", "Ist Archiviert"];
+    const rows = exportData.map(a => [ a.tourTitle, a.vorname, a.name, a.email, `'${a.phone}`, a.adresse, a.plz_ort, a.ernaehrung, (a.besonderes || "").replace(/\n/g, " "), a.status || 'Neu', a.zustaendig || 'Unzugewiesen', a.isArchived ? 'Ja' : 'Nein' ]);
     let csvContent = "\uFEFF" + headers.join(";") + "\r\n";
     rows.forEach(row => { csvContent += row.join(";") + "\r\n"; });
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -249,6 +330,40 @@ export default function AdminArea({ user, touren, onLogout }) {
       return '';
   };
 
+  // --- SAVE HERO VIDEO ---
+  const handleHeroVideoUpload = async (e) => {
+      const files = Array.from(e.target.files);
+      if(files.length === 0) return;
+      setIsUploading(true);
+      
+      try {
+          const newUrls = [];
+          for(const file of files) {
+              const storageRef = ref(storage, `website/hero-${Date.now()}-${file.name}`);
+              const snap = await uploadBytes(storageRef, file);
+              const url = await getDownloadURL(snap.ref);
+              newUrls.push(url);
+          }
+          const updatedVideos = [...(websiteSettings.heroVideos || []), ...newUrls];
+          await setDoc(doc(db, 'settings', 'website'), { heroVideos: updatedVideos }, { merge: true });
+          logAction(`${files.length} Startseiten-Video(s) hochgeladen.`);
+      } catch(e) {
+          alert("Fehler beim Video-Upload.");
+      }
+      setIsUploading(false);
+  };
+
+  const deleteHeroVideo = async (url) => {
+      if(!confirm("Video wirklich löschen?")) return;
+      try {
+          await deleteStorageFile(url);
+          const updatedVideos = (websiteSettings.heroVideos || []).filter(u => u !== url);
+          await setDoc(doc(db, 'settings', 'website'), { heroVideos: updatedVideos }, { merge: true });
+          logAction("Startseiten-Video gelöscht.");
+      } catch(e) { alert("Fehler beim Löschen."); }
+  };
+
+
   // --- SAVE ANGEBOT ---
   const saveAngebot = async (e) => {
     e.preventDefault();
@@ -280,7 +395,8 @@ export default function AdminArea({ user, touren, onLogout }) {
             desc: fd.get('desc'),
             longDesc: fd.get('longDesc'),
             image: combinedImages[0] || (editingAngebot ? editingAngebot.image : ''), 
-            images: combinedImages
+            images: combinedImages,
+            isDeleted: false
         };
 
         if (editingAngebot && editingAngebot.id && !isMock) {
@@ -293,15 +409,6 @@ export default function AdminArea({ user, touren, onLogout }) {
         setEditingAngebot(null);
     } catch (err) { alert("Fehler beim Speichern."); } 
     finally { setIsUploading(false); }
-  };
-
-  const deleteAngebot = async (id, title) => {
-      if (id.startsWith('mock-')) return alert("Mock-Daten können nicht gelöscht werden.");
-      if (!confirm(`Angebot "${title}" wirklich löschen?`)) return;
-      try {
-          await deleteDoc(doc(db, 'angebote', id));
-          logAction(`Angebot gelöscht: ${title}`);
-      } catch (e) { alert("Fehler beim Löschen."); }
   };
 
   // --- SAVE TEAM MEMBER ---
@@ -340,7 +447,8 @@ export default function AdminArea({ user, touren, onLogout }) {
             customFields: customFields,
             visible: editingTeamMember.visible !== false,
             image: combinedImages[0] || '', 
-            images: combinedImages
+            images: combinedImages,
+            isDeleted: false
         };
 
         if (editingTeamMember && editingTeamMember.id) {
@@ -353,14 +461,6 @@ export default function AdminArea({ user, touren, onLogout }) {
         setEditingTeamMember(null);
     } catch (err) { alert("Fehler beim Speichern."); } 
     finally { setIsUploading(false); }
-  };
-
-  const deleteTeamMember = async (id, name) => {
-      if (!confirm(`Teammitglied "${name}" wirklich löschen?`)) return;
-      try {
-          await deleteDoc(doc(db, 'team_profiles', id));
-          logAction(`Teammitglied gelöscht: ${name}`);
-      } catch (e) { alert("Fehler beim Löschen."); }
   };
 
   // --- SAVE MATERIAL LIST ---
@@ -385,14 +485,6 @@ export default function AdminArea({ user, touren, onLogout }) {
       } finally {
           setIsUploading(false);
       }
-  };
-
-  const deleteMaterialList = async (id, name) => {
-      if (!confirm(`Materialliste "${name}" wirklich löschen?`)) return;
-      try {
-          await deleteDoc(doc(db, 'material_lists', id));
-          logAction(`Materialliste gelöscht: ${name}`);
-      } catch (e) { alert("Fehler beim Löschen."); }
   };
 
   // --- SAVE TOUR ---
@@ -453,11 +545,11 @@ export default function AdminArea({ user, touren, onLogout }) {
             kategorie: fd.get('kategorie') || tourKategorien[0] || 'Hochtour',
             technik: parseInt(fd.get('technik')) || 2,
             ausdauer: parseInt(fd.get('ausdauer')) || 2,
-            
             image: combinedImages[0] || '/hochtour.jpg', 
             images: combinedImages, 
             maxPlaetze: parseInt(fd.get('maxPlaetze')) || 4,
-            angemeldet: (editingTour && editingTour.id && !isMock) ? editingTour.angemeldet : 0
+            angemeldet: (editingTour && editingTour.id && !isMock) ? editingTour.angemeldet : 0,
+            isDeleted: false
         };
 
         if (editingTour && editingTour.id && !isMock) {
@@ -472,18 +564,6 @@ export default function AdminArea({ user, touren, onLogout }) {
     finally { setIsUploading(false); }
   };
 
-  const deleteTour = async (id, title) => {
-      if (id.startsWith('mock-')) return alert("Mock-Daten können nicht gelöscht werden.");
-      if (!confirm("Tour wirklich löschen? Alle dazugehörigen Anmeldungen werden ebenfalls unwiderruflich gelöscht!")) return;
-      try {
-          const zuLoeschendeAnmeldungen = anmeldungen.filter(anm => anm.tourId === id);
-          await Promise.all(zuLoeschendeAnmeldungen.map(anm => deleteDoc(doc(db, 'anmeldungen', anm.id))));
-          await deleteDoc(doc(db, 'touren', id));
-          logAction(`Tour gelöscht: ${title || 'Unbekannt'}`);
-          alert(`Tour gelöscht.`);
-      } catch (e) { alert("Fehler beim Löschen."); }
-  };
-
   const saveTask = async (taskData, fileObject) => {
     setIsUploading(true);
     let fileUrl = taskData.fileUrl || null;
@@ -494,7 +574,7 @@ export default function AdminArea({ user, touren, onLogout }) {
         fileUrl = await getDownloadURL(fileRef);
         fileName = fileObject.name;
     }
-    const data = { ...taskData, fileUrl, fileName };
+    const data = { ...taskData, fileUrl, fileName, isDeleted: false };
     if (data.id) {
         await updateDoc(doc(db, 'tasks', data.id), data);
         logAction(`Aufgabe aktualisiert: ${data.title}`);
@@ -521,7 +601,7 @@ export default function AdminArea({ user, touren, onLogout }) {
             logAction(`Dokument aktualisiert: ${name}`);
         } else {
             if (editingDoc.isLink) {
-                await addDoc(collection(db, 'docs'), { name, category, subcategory, isLink: true, url: fd.get('url'), size: 'Web-Link', createdAt: Date.now() });
+                await addDoc(collection(db, 'docs'), { name, category, subcategory, isLink: true, url: fd.get('url'), size: 'Web-Link', createdAt: Date.now(), isDeleted: false });
                 logAction(`Link hinzugefügt: ${name}`);
             } else {
                 for (let file of uploadFiles) {
@@ -531,7 +611,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                     const url = await getDownloadURL(fileRef);
                     const size = `${(compressedFile.size / (1024 * 1024)).toFixed(2)} MB`;
                     const docName = uploadFiles.length > 1 ? compressedFile.name : (name || compressedFile.name);
-                    await addDoc(collection(db, 'docs'), { name: docName, category, subcategory, isLink: false, url, size, createdAt: Date.now() });
+                    await addDoc(collection(db, 'docs'), { name: docName, category, subcategory, isLink: false, url, size, createdAt: Date.now(), isDeleted: false });
                 }
                 logAction(`${uploadFiles.length} Dokument(e) hochgeladen`);
             }
@@ -555,7 +635,7 @@ export default function AdminArea({ user, touren, onLogout }) {
         fileUrl = await getDownloadURL(fileRef);
         fileName = fileObject.name;
     }
-    const data = { ...protocolData, fileUrl, fileName };
+    const data = { ...protocolData, fileUrl, fileName, isDeleted: false };
     if (data.id) {
         await updateDoc(doc(db, 'protocols', data.id), data);
         logAction(`Protokoll aktualisiert: ${data.title}`);
@@ -623,6 +703,28 @@ export default function AdminArea({ user, touren, onLogout }) {
     }
   };
 
+  const getFilteredAnfragen = () => {
+      let filtered = anfragen.filter(a => !a.isDeleted);
+      if (anfragenStatusFilter !== 'Alle') {
+          if (anfragenStatusFilter === 'Neu / Offen') {
+              filtered = filtered.filter(a => !a.status || a.status === 'Neu / Offen');
+          } else {
+              filtered = filtered.filter(a => a.status === anfragenStatusFilter);
+          }
+      }
+      if (anfragenSearch.trim() !== '') {
+          const lower = anfragenSearch.toLowerCase();
+          filtered = filtered.filter(a => 
+              (a.name && a.name.toLowerCase().includes(lower)) || 
+              (a.vorname && a.vorname.toLowerCase().includes(lower)) || 
+              (a.email && a.email.toLowerCase().includes(lower))
+          );
+      }
+      return filtered.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+  };
+
+  const displayedAnmeldungen = anmeldungen.filter(a => anmeldungenView === 'active' ? !a.isArchived : a.isArchived);
+
   return (
     <div className="min-h-screen bg-bg text-accent selection:bg-black selection:text-white">
       <nav className="fixed w-full z-50 px-6 md:px-12 py-8 flex justify-between items-center mix-blend-difference text-white">
@@ -640,10 +742,12 @@ export default function AdminArea({ user, touren, onLogout }) {
           {/* Sidebar */}
           <aside className="w-full md:w-64 flex-shrink-0">
             <h2 className="serif text-2xl italic mb-8">Workspace</h2>
+            
             <div className="space-y-1 mb-8">
               <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2 px-4">Kunden & Website</p>
               {[ 
                 { id: 'dashboard', label: 'Übersicht', icon: LayoutDashboard }, 
+                { id: 'website', label: 'Startseite & Design', icon: Monitor },
                 { id: 'angebote', label: 'Angebote verwalten', icon: Layers },
                 { id: 'touren', label: 'Touren verwalten', icon: Settings }, 
                 { id: 'anmeldungen', label: 'Anmeldungen', icon: Share2 }, 
@@ -655,13 +759,19 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </button>
               ))}
             </div>
-            <div className="space-y-1">
+
+            <div className="space-y-1 mb-8">
               <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2 px-4">Internes Team</p>
               <button onClick={() => setAdminSubView('team')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'team' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Users size={14}/> Team / Bergführer</button>
               <button onClick={() => setAdminSubView('material')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'material' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><FileText size={14}/> Ausrüstung & Material</button>
               <button onClick={() => setAdminSubView('aufgaben')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'aufgaben' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Kanban size={14}/> Aufgaben</button>
               <button onClick={() => setAdminSubView('dokumente')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'dokumente' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Folder size={14}/> Dokumente</button>
               <button onClick={() => setAdminSubView('protokolle')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'protokolle' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><BookOpen size={14}/> Protokolle & Ideen</button>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2 px-4">System</p>
+              <button onClick={() => setAdminSubView('trash')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'trash' ? 'bg-red-500 text-white font-bold' : 'text-red-500 hover:bg-red-50'}`}><RotateCcw size={14}/> Papierkorb</button>
             </div>
           </aside>
 
@@ -672,8 +782,8 @@ export default function AdminArea({ user, touren, onLogout }) {
               <div className="fade-in space-y-12 max-w-7xl mx-auto w-full">
                 <h3 className="serif text-3xl italic">Willkommen zurück</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Offene Aufgaben</p><p className="serif text-3xl italic">{tasks.filter(t => t.status !== 'Erledigt').length}</p></div>
-                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Neue Anfragen</p><p className="serif text-3xl italic">{anfragen.filter(a => !a.status || a.status === 'Neu').length}</p></div>
+                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Offene Aufgaben</p><p className="serif text-3xl italic">{tasks.filter(t => t.status !== 'Erledigt' && !t.isDeleted).length}</p></div>
+                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Neue Anfragen</p><p className="serif text-3xl italic">{anfragen.filter(a => (!a.status || a.status === 'Neu / Offen') && !a.isDeleted).length}</p></div>
                   <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Total Anmeldungen</p><p className="serif text-3xl italic">{anmeldungen.length}</p></div>
                   <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Kontakte im CRM</p><p className="serif text-3xl italic">{kundenStamm.length}</p></div>
                 </div>
@@ -714,7 +824,50 @@ export default function AdminArea({ user, touren, onLogout }) {
               </div>
             )}
 
-            {/* NEU: ANGEBOTE ADMIN */}
+            {adminSubView === 'website' && (
+                <div className="fade-in max-w-6xl mx-auto w-full">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <h3 className="serif text-3xl italic">Startseite & Design</h3>
+                    </div>
+                    <p className="text-sm text-zinc-500 mb-8 max-w-3xl">Hier kannst du das Hintergrund-Video (Hero-Video) für die Startseite austauschen. Lädst du mehrere Videos hoch, wird bei jedem Aufruf der Webseite zufällig eines davon abgespielt.</p>
+
+                    <div className="bg-zinc-50 border border-zinc-200 p-6 shadow-sm mb-12">
+                        <h4 className="text-[11px] font-bold uppercase tracking-widest border-b border-zinc-200 pb-3 mb-6">Neues Video hochladen</h4>
+                        <div className="flex flex-col md:flex-row items-center gap-6">
+                            <input 
+                                type="file" 
+                                accept="video/mp4,video/webm" 
+                                multiple
+                                onChange={handleHeroVideoUpload}
+                                className="w-full md:w-auto text-sm cursor-pointer border border-zinc-300 bg-white p-2" 
+                            />
+                            {isUploading && <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 animate-pulse">Lädt hoch... Bitte warten.</span>}
+                        </div>
+                    </div>
+
+                    <h4 className="text-[11px] font-bold uppercase tracking-widest border-b border-zinc-200 pb-3 mb-6">Aktive Startseiten-Videos ({(websiteSettings.heroVideos || []).length})</h4>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {(websiteSettings.heroVideos || []).map((url, idx) => (
+                            <div key={idx} className="relative bg-black group rounded-sm overflow-hidden aspect-video border border-zinc-200">
+                                <video src={url} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" muted loop playsInline onMouseOver={e=>e.target.play()} onMouseOut={e=>e.target.pause()} />
+                                <button 
+                                    onClick={() => deleteHeroVideo(url)} 
+                                    className="absolute top-3 right-3 bg-red-500 text-white p-2 rounded-full shadow-lg opacity-100 md:opacity-0 group-hover:opacity-100 transition-all hover:scale-110"
+                                    title="Video löschen"
+                                >
+                                    <Trash2 size={16}/>
+                                </button>
+                            </div>
+                        ))}
+                        {(websiteSettings.heroVideos || []).length === 0 && (
+                            <div className="col-span-full p-12 border border-dashed border-zinc-300 text-center text-zinc-400 text-[10px] uppercase tracking-widest">
+                                Standard-Video aktiv. (Keine eigenen hochgeladen)
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {adminSubView === 'angebote' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -783,8 +936,8 @@ export default function AdminArea({ user, touren, onLogout }) {
                         <div className="space-y-4 fade-in">
                             <p className="text-sm text-zinc-500 mb-8">Diese Angebote erscheinen direkt auf der Hauptseite. Ihre Namen fungieren gleichzeitig als Kategorien für die einzelnen Touren.</p>
                             
-                            {activeAngebote.map(angebot => (
-                                <div key={angebot.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
+                            {activeAngeboteFallback.map((angebot, i) => (
+                                <div key={angebot.id || i} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
                                     <div className="flex items-center gap-6">
                                         <div className="w-16 h-12 overflow-hidden bg-zinc-100 flex-shrink-0">
                                             {(angebot.images || angebot.image) ? <img src={(angebot.images || [angebot.image])[0]} className="w-full h-full object-cover" alt="" /> : <Layers className="w-full h-full p-3 text-zinc-300"/>}
@@ -798,7 +951,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
                                         <button onClick={() => setEditingAngebot({...angebot, images: angebot.images || (angebot.image ? [angebot.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
-                                        <button onClick={() => deleteAngebot(angebot.id, angebot.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                                        <button onClick={() => softDelete('angebote', angebot.id, angebot.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
                                 </div>
                             ))}
@@ -807,7 +960,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
-            {/* TEAM PROFILES ADMIN */}
             {adminSubView === 'team' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -859,7 +1011,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                     setEditingTeamMember({...editingTeamMember, images: newImages});
                                                 }}
                                                 className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-10"
-                                                title="Bild entfernen"
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
@@ -871,7 +1022,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <div className="flex-1 border-2 border-dashed border-zinc-300 bg-zinc-50 hover:bg-zinc-100 hover:border-black transition cursor-pointer flex flex-col justify-center items-center relative min-h-[8rem] p-6 group">
                                     <UploadCloud size={28} className="text-zinc-400 mb-3 group-hover:text-black transition" />
                                     <span className="text-xs font-bold uppercase tracking-widest text-zinc-600 group-hover:text-black transition">Weitere Bilder hinzufügen</span>
-                                    <span className="text-[9px] text-zinc-500 mt-2 uppercase tracking-widest text-center leading-relaxed">Klicken oder Dateien hineinziehen<br/>(Mehrfachauswahl möglich)</span>
                                     <input type="file" name="team_files" accept="image/*" multiple className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                                 </div>
                             </div>
@@ -901,9 +1051,9 @@ export default function AdminArea({ user, touren, onLogout }) {
                         </form>
                     ) : (
                         <div className="space-y-4 fade-in">
-                            <p className="text-sm text-zinc-500 mb-8">Verwalte hier die Personen in eurem Team. Sichtbare Profile erscheinen im "Kollektiv" auf der Webseite. Alle Namen stehen zudem in den Dropdowns für "Zuständig" bei Aufgaben und Anfragen zur Verfügung.</p>
+                            <p className="text-sm text-zinc-500 mb-8">Verwalte hier die Personen in eurem Team. Sichtbare Profile erscheinen im "Kollektiv" auf der Webseite.</p>
                             
-                            {teamProfiles.map(member => (
+                            {teamProfiles.filter(t => !t.isDeleted).map(member => (
                                 <div key={member.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
                                     <div className="flex items-center gap-6">
                                         <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-100 flex-shrink-0">
@@ -919,23 +1069,21 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
                                         <button onClick={() => setEditingTeamMember({...member, images: member.images || (member.image ? [member.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
-                                        <button onClick={() => deleteTeamMember(member.id, member.name)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                                        <button onClick={() => softDelete('team_profiles', member.id, member.name)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
                                 </div>
                             ))}
-                            {teamProfiles.length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine Teammitglieder in der Datenbank.</p>}
+                            {teamProfiles.filter(t => !t.isDeleted).length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine aktiven Teammitglieder.</p>}
                         </div>
                     )}
                 </div>
             )}
 
-            {/* NEU: MATERIAL MANAGER ADMIN */}
             {adminSubView === 'material' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                         <h3 className="serif text-3xl italic">Ausrüstung & Materiallisten</h3>
                     </div>
-                    <p className="text-sm text-zinc-500 mb-8 max-w-3xl">Lade hier verschiedene Ausrüstungs-PDFs (z.B. "Packliste Skitour", "Packliste Klettern") hoch. Diese kannst du anschliessend bei der Touren-Erstellung direkt verlinken.</p>
 
                     <div className="grid md:grid-cols-12 gap-8">
                         <div className="md:col-span-5 lg:col-span-4">
@@ -943,7 +1091,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <h4 className="text-[11px] font-bold uppercase tracking-widest border-b border-zinc-200 pb-3">Neue Liste hochladen</h4>
                                 <div>
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Name der Liste</label>
-                                    <input name="name" required placeholder="z.B. Packliste Hochtouren Sommer" className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition" />
+                                    <input name="name" required placeholder="z.B. Packliste Hochtouren" className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition" />
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">PDF Datei auswählen</label>
@@ -971,7 +1119,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                                         </div>
                                     </div>
                                 ))}
-                                {materialLists.length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine Materiallisten vorhanden.</p>}
                             </div>
                         </div>
                     </div>
@@ -1018,7 +1165,8 @@ export default function AdminArea({ user, touren, onLogout }) {
                                             )}
                                         </div>
                                         <div className="mt-6 pt-4 border-t border-zinc-200 text-[9px] uppercase tracking-widest text-zinc-400 flex justify-between items-center">
-                                            <span>{k.touren.length} Touren</span><span className={k.newsletter ? "text-green-600" : "text-zinc-300"}><Mail className="w-3 h-3"/></span>
+                                            <span>{k.touren.length} Touren | {k.anfragen.length} Anfragen</span>
+                                            <span className={k.newsletter ? "text-green-600" : "text-zinc-300"}><Mail className="w-3 h-3"/></span>
                                         </div>
                                     </div>
                                 ))}
@@ -1141,7 +1289,10 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                             <div key={anm.id} className="p-5 bg-zinc-50 border border-zinc-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-black transition">
                                                                 <div>
                                                                     <span className="text-[9px] text-zinc-400 tracking-widest">{anm.timestamp ? new Date(anm.timestamp.seconds * 1000).toLocaleDateString('de-CH') : ''}</span>
-                                                                    <p className="font-bold text-base mt-1">{anm.tourTitle}</p>
+                                                                    <p className="font-bold text-base mt-1">
+                                                                        {anm.tourTitle}
+                                                                        {anm.isArchived && <span className="ml-2 text-[8px] bg-zinc-200 text-zinc-500 px-2 py-0.5 rounded-sm uppercase tracking-widest font-bold">Archiviert</span>}
+                                                                    </p>
                                                                     {anm.besonderes && <p className="text-sm text-zinc-600 mt-2 italic bg-white p-3 border border-zinc-100">"{anm.besonderes}"</p>}
                                                                 </div>
                                                                 <span className="text-[10px] uppercase tracking-widest bg-zinc-200 px-3 py-1.5 font-bold self-start sm:self-auto">{anm.status || 'Erfolgreich'}</span>
@@ -1175,19 +1326,44 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
+            {/* ANFRAGEN ADMIN */}
             {adminSubView === 'anfragen' && (
                 <div className="fade-in max-w-5xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                         <h3 className="serif text-3xl italic">Anfragen über die Website</h3>
                     </div>
+                    
+                    <div className="flex flex-col md:flex-row gap-4 mb-8 bg-zinc-50 p-4 border border-zinc-200">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                            <input 
+                                type="text" 
+                                placeholder="Suchen nach Name, Email..." 
+                                value={anfragenSearch} 
+                                onChange={(e) => setAnfragenSearch(e.target.value)} 
+                                className="w-full pl-10 pr-4 py-3 border border-zinc-300 text-sm outline-none focus:border-black bg-white" 
+                            />
+                        </div>
+                        <div className="flex-1 md:max-w-xs">
+                            <select 
+                                value={anfragenStatusFilter} 
+                                onChange={e => setAnfragenStatusFilter(e.target.value)} 
+                                className="w-full border border-zinc-300 p-3 text-sm outline-none bg-white cursor-pointer"
+                            >
+                                <option value="Alle">Alle Status anzeigen</option>
+                                {ANFRAGEN_STATUS.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
                     <div className="space-y-6">
-                        {anfragen.map(a => (
+                        {getFilteredAnfragen().map(a => (
                             <div key={a.id} className="p-5 md:p-8 border border-zinc-200 bg-zinc-50 relative group hover:border-black transition">
                                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                                     <span className="text-[10px] uppercase tracking-widest font-bold bg-black text-white px-4 py-1.5 self-start">{a.thema || 'Allgemein'}</span>
                                     <div className="flex items-center gap-4">
                                         <span className="text-xs text-zinc-400">{a.timestamp ? new Date(a.timestamp.seconds * 1000).toLocaleDateString('de-CH') : ''}</span>
-                                        <button onClick={() => { if(confirm('Anfrage endgültig löschen?')) { deleteDoc(doc(db,'anfragen',a.id)); logAction(`Anfrage gelöscht (${a.vorname} ${a.name})`); } }} className="text-red-300 hover:text-red-500 opacity-100 md:opacity-0 group-hover:opacity-100 transition"><Trash2 size={18}/></button>
+                                        <button onClick={() => softDelete('anfragen', a.id, `${a.vorname} ${a.name}`)} className="text-red-300 hover:text-red-500 opacity-100 md:opacity-0 group-hover:opacity-100 transition"><Trash2 size={18}/></button>
                                     </div>
                                 </div>
                                 <p className="font-bold text-xl mt-4 break-words">{a.vorname} {a.name}</p>
@@ -1195,24 +1371,43 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <div className="mt-2 p-4 md:p-6 bg-white border border-zinc-100 text-base text-zinc-700 italic leading-relaxed whitespace-pre-line shadow-sm">
                                     "{a.nachricht}"
                                 </div>
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-6 pt-6 border-t border-zinc-200">
-                                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Wer bearbeitet diese Anfrage?</label>
-                                    <select 
-                                        value={a.assignee || ''} 
-                                        onChange={async (e) => await updateDoc(doc(db, 'anfragen', a.id), { assignee: e.target.value })}
-                                        className="border border-zinc-300 p-2 text-xs outline-none bg-white uppercase tracking-widest font-bold cursor-pointer hover:border-black transition w-full sm:w-auto"
-                                    >
-                                        <option value="">-- Frei / Niemand zugewiesen --</option>
-                                        {teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}
-                                    </select>
+                                <div className="grid md:grid-cols-2 gap-4 mt-6 pt-6 border-t border-zinc-200">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Wer bearbeitet diese Anfrage?</label>
+                                        <select 
+                                            value={a.assignee || ''} 
+                                            onChange={async (e) => await updateDoc(doc(db, 'anfragen', a.id), { assignee: e.target.value })}
+                                            className="border border-zinc-300 p-2 text-xs outline-none bg-white uppercase tracking-widest font-bold cursor-pointer hover:border-black transition"
+                                        >
+                                            <option value="">-- Frei / Niemand zugewiesen --</option>
+                                            {teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Aktueller Status</label>
+                                        <select 
+                                            value={a.status || 'Neu / Offen'} 
+                                            onChange={async (e) => await updateDoc(doc(db, 'anfragen', a.id), { status: e.target.value })}
+                                            className={`border p-2 text-xs outline-none uppercase tracking-widest font-bold cursor-pointer transition
+                                                ${(!a.status || a.status === 'Neu / Offen') ? 'border-amber-300 bg-amber-50 text-amber-700' : ''}
+                                                ${a.status === 'In Bearbeitung' ? 'border-blue-300 bg-blue-50 text-blue-700' : ''}
+                                                ${a.status === 'Geantwortet' ? 'border-purple-300 bg-purple-50 text-purple-700' : ''}
+                                                ${a.status === 'Erfolgreich gebucht' ? 'border-green-300 bg-green-50 text-green-700' : ''}
+                                                ${a.status === 'Absage' ? 'border-zinc-300 bg-zinc-200 text-zinc-600' : ''}
+                                            `}
+                                        >
+                                            {ANFRAGEN_STATUS.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         ))}
-                        {anfragen.length === 0 && <p className="text-base text-zinc-500 p-8 border border-dashed border-zinc-300 text-center">Aktuell gibt es keine offenen Anfragen.</p>}
+                        {getFilteredAnfragen().length === 0 && <p className="text-base text-zinc-500 p-8 border border-dashed border-zinc-300 text-center">Keine Anfragen gefunden, die den Filtern entsprechen.</p>}
                     </div>
                 </div>
             )}
 
+            {/* TOUREN ADMIN */}
             {adminSubView === 'touren' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -1381,6 +1576,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 const isVisible = t.visible !== false;
                                 const isExample = t.isExample === true;
                                 
+                                if (t.isDeleted) return false;
                                 if (tourStatusFilter === 'Beispieltouren' && !isExample) return false;
                                 if (tourStatusFilter === 'Öffentlich' && (!isVisible || isExample)) return false;
                                 if (tourStatusFilter === 'Versteckt' && isVisible) return false;
@@ -1401,19 +1597,11 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
                                         <button onClick={() => setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
-                                        <button onClick={() => deleteTour(t.id, t.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                                        <button onClick={() => softDelete('touren', t.id, t.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
                                 </div>
                             ))}
-                            {touren.filter(t => {
-                                const isVisible = t.visible !== false;
-                                const isExample = t.isExample === true;
-                                if (tourStatusFilter === 'Beispieltouren' && !isExample) return false;
-                                if (tourStatusFilter === 'Öffentlich' && (!isVisible || isExample)) return false;
-                                if (tourStatusFilter === 'Versteckt' && isVisible) return false;
-                                if (tourKatFilter !== 'Alle' && getKat(t, tourKategorien) !== tourKatFilter) return false;
-                                return true;
-                            }).length === 0 && (
+                            {touren.filter(t => !t.isDeleted && (tourStatusFilter === 'Beispieltouren' ? t.isExample : (tourStatusFilter === 'Öffentlich' ? (t.visible !== false && !t.isExample) : (t.visible === false))) && (tourKatFilter === 'Alle' || getKat(t, tourKategorien) === tourKatFilter)).length === 0 && (
                                 <div className="text-center p-12 border border-dashed border-zinc-200 text-zinc-400">
                                     <p className="text-sm italic">Keine Touren gefunden, die zu den aktuellen Filtern passen.</p>
                                 </div>
@@ -1423,28 +1611,40 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
+            {/* ANMELDUNGEN ADMIN */}
             {adminSubView === 'anmeldungen' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
-                        <h3 className="serif text-3xl italic">Anmeldungen pro Tour</h3>
-                        <button onClick={() => exportToExcel(anmeldungen)} className="w-full md:w-auto justify-center px-6 py-3 bg-black text-white text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Download size={14}/> Excel Export</button>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                            <h3 className="serif text-3xl italic">Anmeldungen</h3>
+                            <div className="bg-zinc-100 p-1 flex gap-1 rounded-sm ml-0 sm:ml-4">
+                                <button onClick={() => setAnmeldungenView('active')} className={`px-4 py-1.5 text-[10px] uppercase tracking-widest font-bold transition-all ${anmeldungenView === 'active' ? 'bg-white shadow-sm text-black' : 'text-zinc-400 hover:text-black'}`}>Aktuell</button>
+                                <button onClick={() => setAnmeldungenView('archived')} className={`px-4 py-1.5 text-[10px] uppercase tracking-widest font-bold transition-all flex items-center gap-1 ${anmeldungenView === 'archived' ? 'bg-white shadow-sm text-black' : 'text-zinc-400 hover:text-black'}`}><Archive size={12}/> Archiv</button>
+                            </div>
+                        </div>
+                        <button onClick={() => exportToExcel(displayedAnmeldungen)} className="w-full md:w-auto justify-center px-6 py-3 bg-black text-white text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Download size={14}/> Excel Export</button>
                     </div>
                     <div className="space-y-16">
-                        {Object.entries(anmeldungen.reduce((acc, anm) => { const k = anm.tourTitle; if(!acc[k]) acc[k]=[]; acc[k].push(anm); return acc; }, {})).map(([title, teilnehmer]) => (
+                        {Object.entries(displayedAnmeldungen.reduce((acc, anm) => { const k = anm.tourTitle; if(!acc[k]) acc[k]=[]; acc[k].push(anm); return acc; }, {})).map(([title, teilnehmer]) => (
                             <div key={title} className="bg-white border border-zinc-200 shadow-sm w-full">
-                                <div className="p-5 md:p-6 bg-white border-b border-zinc-200">
+                                <div className="p-5 md:p-6 bg-zinc-50 border-b border-zinc-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                     <h4 className="text-base md:text-lg font-bold uppercase tracking-widest leading-relaxed">
-                                        {title} <span className="text-zinc-400 font-normal ml-2 block md:inline mt-1 md:mt-0">({teilnehmer.length} gebucht)</span>
+                                        {title} <span className="text-zinc-400 font-normal ml-2 block md:inline mt-1 md:mt-0">({teilnehmer.length} {anmeldungenView === 'active' ? 'gebucht' : 'archiviert'})</span>
                                     </h4>
+                                    {anmeldungenView === 'active' && (
+                                        <button onClick={() => archiveTourBookings(title, teilnehmer)} className="text-[10px] uppercase tracking-widest bg-zinc-200 hover:bg-zinc-300 text-black px-4 py-2 font-bold transition flex items-center gap-2">
+                                            <Archive size={12}/> Ins Archiv verschieben & Tour resetten
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="w-full">
-                                    <div className="hidden md:grid grid-cols-12 gap-4 bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-widest font-bold text-[10px] p-5">
+                                    <div className="hidden md:grid grid-cols-12 gap-4 bg-white border-b border-zinc-200 text-zinc-500 uppercase tracking-widest font-bold text-[10px] p-5">
                                         <div className="col-span-4">Name & Adresse</div>
                                         <div className="col-span-3">Kontakt</div>
                                         <div className="col-span-3">Infos & Ernährung</div>
                                         <div className="col-span-2 text-right">Aktion</div>
                                     </div>
-                                    <div className="divide-y divide-zinc-100">
+                                    <div className="divide-y divide-zinc-100 bg-white">
                                         {teilnehmer.map(a => (
                                             <div key={a.id} className="flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 p-5 hover:bg-zinc-50 transition">
                                                 <div className="col-span-4">
@@ -1461,8 +1661,8 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                     {!a.ernaehrung && !a.besonderes && <p className="text-zinc-400 text-xs italic hidden md:block">Keine Anmerkungen</p>}
                                                 </div>
                                                 <div className="col-span-2 flex items-center md:justify-end mt-3 md:mt-0 pt-4 md:pt-0 border-t md:border-transparent border-zinc-100">
-                                                    <button onClick={() => { if(confirm('Buchung wirklich löschen?')) { deleteDoc(doc(db,'anmeldungen',a.id)); logAction(`Anmeldung storniert: ${a.vorname} ${a.name} für ${title}`); } }} className="text-[10px] uppercase tracking-widest font-bold text-red-500 md:text-red-400 hover:text-red-600 transition border border-red-200 md:border-transparent px-4 py-2 md:p-0 rounded-sm md:rounded-none w-full md:w-auto bg-red-50 md:bg-transparent">
-                                                        Stornieren
+                                                    <button onClick={() => deleteAnmeldung(a, title)} className="text-[10px] uppercase tracking-widest font-bold text-red-500 md:text-red-400 hover:text-red-600 transition border border-red-200 md:border-transparent px-4 py-2 md:p-0 rounded-sm md:rounded-none w-full md:w-auto bg-red-50 md:bg-transparent flex items-center justify-center gap-2">
+                                                        <Trash2 size={12}/> {anmeldungenView === 'active' ? 'Stornieren' : 'Löschen'}
                                                     </button>
                                                 </div>
                                             </div>
@@ -1471,7 +1671,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 </div>
                             </div>
                         ))}
-                        {anmeldungen.length === 0 && <p className="text-center p-12 border border-dashed border-zinc-300 text-zinc-500 uppercase tracking-widest">Noch keine Anmeldungen vorhanden.</p>}
+                        {displayedAnmeldungen.length === 0 && <p className="text-center p-12 border border-dashed border-zinc-300 text-zinc-500 uppercase tracking-widest">Keine {anmeldungenView === 'active' ? 'aktuellen' : 'archivierten'} Anmeldungen vorhanden.</p>}
                     </div>
                 </div>
             )}
@@ -1492,10 +1692,10 @@ export default function AdminArea({ user, touren, onLogout }) {
                         {KANBAN_COLUMNS.map(col => (
                             <div key={col} className="w-full md:w-80 flex-shrink-0 bg-zinc-50 border border-zinc-200 p-5 rounded-sm">
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 flex justify-between border-b border-zinc-200 pb-3">
-                                    {col} <span className="bg-zinc-200 px-2 rounded-full text-black">{tasks.filter(t => t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).length}</span>
+                                    {col} <span className="bg-zinc-200 px-2 rounded-full text-black">{tasks.filter(t => !t.isDeleted && t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).length}</span>
                                 </h4>
                                 <div className="space-y-4">
-                                    {tasks.filter(t => t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).map(t => (
+                                    {tasks.filter(t => !t.isDeleted && t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).map(t => (
                                         <div key={t.id} onClick={() => setEditingTask(t)} className="bg-white p-5 border border-zinc-200 cursor-pointer hover:border-black transition shadow-sm group">
                                             <div className="flex justify-between items-start mb-3">
                                                 <span className="text-[8px] uppercase tracking-widest text-zinc-500 bg-zinc-100 px-2 py-1">{t.category}</span>
@@ -1544,12 +1744,16 @@ export default function AdminArea({ user, touren, onLogout }) {
                             <div className="col-span-2 text-right">Aktionen</div>
                         </div>
                         <div className="divide-y divide-zinc-100">
-                            {docs.filter(d => (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).map(d => (
+                            {docs.filter(d => !d.isDeleted && (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).map(d => (
                                 <div key={d.id} className="flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 p-5 hover:bg-zinc-50 transition group">
                                     <div className="col-span-6 flex gap-4 items-start md:items-center">
                                         <div className="p-3 bg-zinc-100 text-zinc-400 rounded-sm hidden sm:block flex-shrink-0"><FileText size={20}/></div>
                                         <div className="min-w-0 flex-1">
-                                            <span className="font-bold text-sm md:text-base block mb-1 truncate leading-tight">{d.name}</span>
+                                            {d.url ? (
+                                                <a href={d.url} target="_blank" rel="noreferrer" className="font-bold text-sm md:text-base block mb-1 truncate leading-tight hover:underline hover:text-blue-600 cursor-pointer">{d.name}</a>
+                                            ) : (
+                                                <span className="font-bold text-sm md:text-base block mb-1 truncate leading-tight">{d.name}</span>
+                                            )}
                                             <span className="text-[10px] text-zinc-400 tracking-widest">{d.size}</span>
                                         </div>
                                     </div>
@@ -1559,11 +1763,11 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     </div>
                                     <div className="col-span-2 flex justify-start md:justify-end gap-3 mt-3 md:mt-0 pt-4 md:pt-0 border-t md:border-transparent border-zinc-100 items-center opacity-100 md:opacity-50 group-hover:opacity-100 transition">
                                         <button onClick={() => setEditingDoc(d)} className="hover:text-black flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold bg-zinc-100 md:bg-transparent px-4 md:px-0 py-2 md:py-0 rounded-sm md:rounded-none flex-1 md:flex-none justify-center"><Edit size={14}/> Edit</button>
-                                        {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="hover:text-black flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold bg-zinc-100 md:bg-transparent px-4 md:px-0 py-2 md:py-0 rounded-sm md:rounded-none flex-1 md:flex-none justify-center"><ExternalLink size={14}/> Öffnen</a>}
+                                        <button onClick={() => softDelete('docs', d.id, d.name)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 transition flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
                                 </div>
                             ))}
-                            {docs.length === 0 && <div className="p-12 text-center text-zinc-400 text-sm uppercase tracking-widest">Keine Dokumente in dieser Ansicht.</div>}
+                            {docs.filter(d => !d.isDeleted && (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).length === 0 && <div className="p-12 text-center text-zinc-400 text-sm uppercase tracking-widest">Keine Dokumente in dieser Ansicht.</div>}
                         </div>
                     </div>
                 </div>
@@ -1582,7 +1786,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                         {['Alle', ...protocolKategorien].map(c => <button key={c} onClick={() => setProtocolFilter(c)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${protocolFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {protocols.filter(p => protocolFilter === 'Alle' || p.category === protocolFilter).map(p => (
+                        {protocols.filter(p => !p.isDeleted && (protocolFilter === 'Alle' || p.category === protocolFilter)).map(p => (
                             <div key={p.id} className="border border-zinc-200 p-6 md:p-8 hover:border-black transition bg-white flex flex-col justify-between group">
                                 <div>
                                     <div className="flex justify-between items-start mb-6">
@@ -1591,12 +1795,87 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     <p className="text-sm text-zinc-600 line-clamp-4 leading-relaxed mb-6">"{p.notes}"</p>
                                 </div>
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-6 border-t border-zinc-100 opacity-100 md:opacity-60 group-hover:opacity-100 transition">
-                                    <button onClick={() => generateAndSharePDF(p)} className="flex items-center gap-2 text-[9px] uppercase tracking-widest font-bold hover:text-black"><Download size={14}/> PDF Export</button>
                                     <button onClick={() => setEditingProtocol(p)} className="flex items-center gap-2 text-[9px] uppercase tracking-widest font-bold hover:text-black"><Edit size={14}/> Bearbeiten</button>
+                                    <button onClick={() => softDelete('protocols', p.id, p.title)} className="flex items-center gap-2 text-[9px] uppercase tracking-widest font-bold text-red-400 hover:text-red-600"><Trash2 size={14}/> Löschen</button>
                                 </div>
                             </div>
                         ))}
-                        {protocols.filter(p => protocolFilter === 'Alle' || p.category === protocolFilter).length === 0 && <div className="col-span-full text-center p-12 border border-dashed border-zinc-300 text-zinc-400 uppercase tracking-widest text-sm">Noch keine Einträge in dieser Kategorie.</div>}
+                        {protocols.filter(p => !p.isDeleted && (protocolFilter === 'Alle' || p.category === protocolFilter)).length === 0 && <div className="col-span-full text-center p-12 border border-dashed border-zinc-300 text-zinc-400 uppercase tracking-widest text-sm">Noch keine Einträge in dieser Kategorie.</div>}
+                    </div>
+                </div>
+            )}
+
+            {/* PAPIERKORB ADMIN */}
+            {adminSubView === 'trash' && (
+                <div className="fade-in max-w-6xl mx-auto w-full">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <h3 className="serif text-3xl italic text-red-600 flex items-center gap-3"><RotateCcw size={28}/> Papierkorb</h3>
+                    </div>
+                    <p className="text-sm text-zinc-500 mb-8 max-w-3xl">Gelöschte Einträge können hier endgültig vernichtet werden (Löscht auch die verknüpften Bild/PDF-Dateien auf dem Server) oder wiederhergestellt werden.</p>
+
+                    <div className="flex flex-wrap gap-2 mb-8 border-b border-zinc-100 pb-4 w-full">
+                        {[
+                            { id: 'touren', label: `Touren (${touren.filter(t => t.isDeleted).length})` },
+                            { id: 'angebote', label: `Angebote (${angebote.filter(a => a.isDeleted).length})` },
+                            { id: 'team_profiles', label: `Team (${teamProfiles.filter(t => t.isDeleted).length})` },
+                            { id: 'docs', label: `Dokumente (${docs.filter(d => d.isDeleted).length})` },
+                            { id: 'tasks', label: `Aufgaben (${tasks.filter(t => t.isDeleted).length})` },
+                            { id: 'protocols', label: `Protokolle (${protocols.filter(p => p.isDeleted).length})` }
+                        ].map(tab => (
+                            <button key={tab.id} onClick={() => setTrashTab(tab.id)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${trashTab === tab.id ? 'border-red-500 text-red-600' : 'border-transparent text-zinc-400 hover:text-black'}`}>{tab.label}</button>
+                        ))}
+                    </div>
+
+                    <div className="bg-white border border-zinc-200">
+                        {/* Render based on selected Tab */}
+                        {trashTab === 'touren' && touren.filter(t => t.isDeleted).map(item => (
+                            <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
+                                <div><p className="font-bold text-sm uppercase tracking-widest">{item.title}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
+                                <div className="flex gap-4"><button onClick={() => restoreItem('touren', item.id, item.title)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('touren', item, item.title)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
+                            </div>
+                        ))}
+                        {trashTab === 'angebote' && angebote.filter(a => a.isDeleted).map(item => (
+                            <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
+                                <div><p className="font-bold text-sm uppercase tracking-widest">{item.title}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
+                                <div className="flex gap-4"><button onClick={() => restoreItem('angebote', item.id, item.title)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('angebote', item, item.title)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
+                            </div>
+                        ))}
+                        {trashTab === 'team_profiles' && teamProfiles.filter(t => t.isDeleted).map(item => (
+                            <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
+                                <div><p className="font-bold text-sm uppercase tracking-widest">{item.name}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
+                                <div className="flex gap-4"><button onClick={() => restoreItem('team_profiles', item.id, item.name)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('team_profiles', item, item.name)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
+                            </div>
+                        ))}
+                        {trashTab === 'docs' && docs.filter(d => d.isDeleted).map(item => (
+                            <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
+                                <div><p className="font-bold text-sm uppercase tracking-widest">{item.name}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
+                                <div className="flex gap-4"><button onClick={() => restoreItem('docs', item.id, item.name)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('docs', item, item.name)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
+                            </div>
+                        ))}
+                        {trashTab === 'tasks' && tasks.filter(t => t.isDeleted).map(item => (
+                            <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
+                                <div><p className="font-bold text-sm uppercase tracking-widest">{item.title}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
+                                <div className="flex gap-4"><button onClick={() => restoreItem('tasks', item.id, item.title)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('tasks', item, item.title)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
+                            </div>
+                        ))}
+                        {trashTab === 'protocols' && protocols.filter(p => p.isDeleted).map(item => (
+                            <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
+                                <div><p className="font-bold text-sm uppercase tracking-widest">{item.title}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
+                                <div className="flex gap-4"><button onClick={() => restoreItem('protocols', item.id, item.title)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('protocols', item, item.title)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
+                            </div>
+                        ))}
+
+                        {/* Empty States */}
+                        {((trashTab === 'touren' && touren.filter(t => t.isDeleted).length === 0) ||
+                          (trashTab === 'angebote' && angebote.filter(a => a.isDeleted).length === 0) ||
+                          (trashTab === 'team_profiles' && teamProfiles.filter(t => t.isDeleted).length === 0) ||
+                          (trashTab === 'docs' && docs.filter(d => d.isDeleted).length === 0) ||
+                          (trashTab === 'tasks' && tasks.filter(t => t.isDeleted).length === 0) ||
+                          (trashTab === 'protocols' && protocols.filter(p => p.isDeleted).length === 0)) && (
+                            <div className="p-12 text-center text-zinc-400 text-[10px] uppercase tracking-widest border border-dashed border-zinc-200">
+                                Dieser Papierkorb ist leer.
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -1773,7 +2052,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                     </div>
 
                     <div className="flex flex-col-reverse md:flex-row justify-between items-center pt-8 border-t border-zinc-200 gap-4">
-                        {editingTask.id ? <button type="button" onClick={() => { if(confirm('Aufgabe sicher löschen?')) { deleteDoc(doc(db,'tasks',editingTask.id)); logAction(`Aufgabe gelöscht: ${editingTask.title}`); setEditingTask(null); } }} className="w-full md:w-auto justify-center text-red-500 font-bold text-[10px] uppercase tracking-widest hover:text-red-700 hover:bg-red-50 px-4 py-3 transition flex items-center gap-2"><Trash2 size={16}/> Aufgabe löschen</button> : <div/>} 
+                        {editingTask.id ? <button type="button" onClick={() => { softDelete('tasks', editingTask.id, editingTask.title); setEditingTask(null); }} className="w-full md:w-auto justify-center text-red-500 font-bold text-[10px] uppercase tracking-widest hover:text-red-700 hover:bg-red-50 px-4 py-3 transition flex items-center gap-2"><Trash2 size={16}/> Aufgabe löschen</button> : <div/>} 
                         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
                             <button type="button" onClick={() => setEditingTask(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
                             <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading ? 'Speichert...' : 'Aufgabe speichern'}</button>
@@ -1843,7 +2122,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                     )}
 
                     <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 gap-4">
-                        {editingDoc.id ? <button type="button" onClick={() => { if(confirm('Wirklich löschen?')) { deleteDoc(doc(db,'docs',editingDoc.id)); logAction(`Dokument gelöscht: ${editingDoc.name}`); setEditingDoc(null); } }} className="text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline text-center w-full md:w-auto py-2">Löschen</button> : <div/>} 
+                        {editingDoc.id ? <button type="button" onClick={() => { softDelete('docs', editingDoc.id, editingDoc.name); setEditingDoc(null); }} className="text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline text-center w-full md:w-auto py-2">Löschen</button> : <div/>} 
                         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
                             <button type="button" onClick={() => { setEditingDoc(null); setUploadFiles([]); }} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
                             <button type="submit" disabled={isUploading || (!editingDoc.id && !editingDoc.isLink && uploadFiles.length === 0)} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl disabled:bg-zinc-300 text-center">{isUploading?'Lädt...':'Speichern'}</button>
@@ -1888,7 +2167,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                     </div>
 
                     <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 mt-8 gap-4">
-                        {editingProtocol.id ? <button type="button" onClick={() => { if(confirm('Eintrag komplett löschen?')) { deleteDoc(doc(db,'protocols',editingProtocol.id)); logAction(`Protokoll gelöscht: ${editingProtocol.title}`); setEditingProtocol(null); } }} className="w-full md:w-auto justify-center text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline flex items-center gap-2 py-2"><Trash2 size={14}/> Löschen</button> : <div/>} 
+                        {editingProtocol.id ? <button type="button" onClick={() => { softDelete('protocols', editingProtocol.id, editingProtocol.title); setEditingProtocol(null); }} className="w-full md:w-auto justify-center text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline flex items-center gap-2 py-2"><Trash2 size={14}/> Löschen</button> : <div/>} 
                         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
                             <button type="button" onClick={() => setEditingProtocol(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
                             <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading?'Speichert...':'Speichern'}</button>
