@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { FileText, Tag, Filter, Search, Info, Hand } from 'lucide-react';
 
 // ==========================================
@@ -35,7 +35,7 @@ const Instagram = (props) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
 );
 
-const TEAM = [
+const TEAM_FALLBACK = [
     { 
         name: "ADRIAN BÜSCHLEN", 
         title: "BERGFÜHRER IVBV", 
@@ -44,7 +44,8 @@ const TEAM = [
         superkraft: "Findet im dichtesten Nebel zielsicher die Kaffeemaschine der Hütte.",
         schwaeche: "Wird 'grumpy', wenn der Gipfelschnaps im Tal vergessen wurde.",
         snack: "Getrocknete Mangos & Appenzeller Biberli",
-        zitat: "Steiler ist geiler."
+        zitat: "Steiler ist geiler.",
+        visible: true
     },
     { 
         name: "JENS Schärer", 
@@ -54,7 +55,8 @@ const TEAM = [
         superkraft: "Hat eine eingebaute Heizspirale in den Fingern (friert nie beim Eisklettern).",
         schwaeche: "Vergisst immer, wo er die Stirnlampe hingelegt hat (meistens auf dem Kopf).",
         snack: "Käse. Einfach nur ein riesiges Stück Bergkäse.",
-        zitat: "Eis ist auch nur Wasser mit Haltung."
+        zitat: "Eis ist auch nur Wasser mit Haltung.",
+        visible: true
     },
     { 
         name: "MATTHIAS Bettschen", 
@@ -64,7 +66,8 @@ const TEAM = [
         superkraft: "Findet an einer aalglatten Felswand noch einen Hook für den kleinen Zeh.",
         schwaeche: "Kann an keiner Engadiner Dorfbäckerei vorbeigehen, ohne eine Nusstorte zu kaufen.",
         snack: "Engadiner Nusstorte (was sonst?)",
-        zitat: "Ruhe bewahren und weiterklettern."
+        zitat: "Ruhe bewahren und weiterklettern.",
+        visible: true
     }
 ];
 
@@ -138,6 +141,9 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [bookingStatus, setBookingStatus] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
+    // Neues State für Team Profiles
+    const [teamProfiles, setTeamProfiles] = useState([]);
+    
     const [isAllToursModalOpen, setIsAllToursModalOpen] = useState(false);
     const [isIdeenBoardOpen, setIsIdeenBoardOpen] = useState(false);
     const [filterKategorie, setFilterKategorie] = useState('Alle');
@@ -151,6 +157,10 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const visibleTours = touren.filter(t => t.visible !== false && t.isExample !== true);
     const exampleTours = touren.filter(t => t.isExample === true);
     const recentTours = visibleTours.slice(0, 3);
+
+    // Beziehe die Profile dynamisch oder verwende das Hardcoded Array als Fallback
+    const activeTeamProfiles = teamProfiles.length > 0 ? teamProfiles : TEAM_FALLBACK;
+    const visibleTeamProfiles = activeTeamProfiles.filter(t => t.visible !== false);
 
     const filteredTours = visibleTours.filter(t => {
         if (filterKategorie !== 'Alle' && getKat(t) !== filterKategorie) return false;
@@ -169,10 +179,18 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+    
+    // Team Profile laden
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, 'team_profiles'), snap => {
+            setTeamProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsub();
+    }, []);
 
     useEffect(() => {
-        if (selectedTour) setHasScrolledGallery(false);
-    }, [selectedTour]);
+        if (selectedTour || selectedTeamMember) setHasScrolledGallery(false);
+    }, [selectedTour, selectedTeamMember]);
 
     useEffect(() => {
         if (window.matchMedia("(hover: hover)").matches) return;
@@ -197,13 +215,14 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         }, 100);
 
         return () => observer.disconnect();
-    }, [touren, angebotTab, isAllToursModalOpen, isIdeenBoardOpen]);
+    }, [touren, teamProfiles, angebotTab, isAllToursModalOpen, isIdeenBoardOpen]);
 
     // Tastatur-Navigation in der Desktop Lightbox
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (isLightboxOpen === null || !selectedTour) return;
-            const imgs = selectedTour.images || [selectedTour.image];
+            if (isLightboxOpen === null || (!selectedTour && !selectedTeamMember)) return;
+            const activeItem = selectedTour || selectedTeamMember;
+            const imgs = activeItem.images || [activeItem.image];
             if (imgs.length <= 1) return;
             if (e.key === 'ArrowRight') setIsLightboxOpen((prev) => (prev + 1) % imgs.length);
             else if (e.key === 'ArrowLeft') setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length);
@@ -211,7 +230,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isLightboxOpen, selectedTour]);
+    }, [isLightboxOpen, selectedTour, selectedTeamMember]);
 
     // Automatisches Scrollen im Mobile-Galeriemodus zur angeklickten Bild-ID
     useEffect(() => {
@@ -456,16 +475,16 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className="max-w-7xl mx-auto">
                         <div className="text-center mb-24"><h2 className="serif text-4xl italic">Das Kollektiv</h2></div>
                         <div className="grid md:grid-cols-3 gap-16 md:gap-8 lg:gap-16">
-                            {TEAM.map((member, i) => (
+                            {visibleTeamProfiles.map((member, i) => (
                                 <div key={i} onClick={() => setSelectedTeamMember(member)} className="text-center flex flex-col items-center group cursor-pointer">
                                     <div className="team-img-container aspect-[4/5] w-full bg-zinc-100 mb-10 overflow-hidden relative">
-                                        <img src={member.image} alt={member.name} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
+                                        <img src={(member.images || [member.image])[0] || '/adrian.jpg'} alt={member.name} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
                                     </div>
                                     <div className="space-y-4 max-w-[280px]">
                                         <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] group-hover:text-zinc-500 transition-colors">{member.name}</h3>
                                         <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-medium">{member.title}</p>
                                         <div className="h-px w-8 bg-zinc-200 mx-auto my-6"></div>
-                                        <p className="text-zinc-500 text-[10px] leading-loose font-light tracking-wide uppercase">{member.desc}</p>
+                                        <p className="text-zinc-500 text-[10px] leading-loose font-light tracking-wide uppercase line-clamp-3">{member.desc}</p>
                                         <div className="pt-4 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <span className="text-[8px] uppercase tracking-widest text-zinc-400 border-b border-zinc-200 pb-1">Steckbrief ansehen</span>
                                         </div>
@@ -512,13 +531,11 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             {isAllToursModalOpen && (
                 <div className="fixed inset-0 z-[150] flex flex-col bg-[#f9f9f7] overflow-y-auto fade-in">
                     
-                    {/* Header */}
                     <div className="p-6 md:px-12 md:py-8 flex justify-between items-center bg-white border-b border-zinc-200 sticky top-0 z-20">
                         <h2 className="serif text-3xl md:text-4xl italic">Tourenübersicht</h2>
                         <button onClick={() => setIsAllToursModalOpen(false)} className="w-12 h-12 flex items-center justify-center bg-zinc-100 hover:bg-black hover:text-white rounded-full transition-colors text-2xl">&times;</button>
                     </div>
                     
-                    {/* Filter Leiste & Info Button */}
                     <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
                         <div className="max-w-7xl mx-auto">
                             <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
@@ -562,7 +579,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 </button>
                             </div>
                             
-                            {/* Aufklappbarer Info Bereich für Technik & Ausdauer */}
                             {showLevelInfo && (
                                 <div className="mt-6 p-6 md:p-8 bg-[#f9f9f7] border border-zinc-200 text-xs font-light leading-relaxed relative fade-in">
                                     <button onClick={() => setShowLevelInfo(false)} className="absolute top-4 right-4 text-2xl text-zinc-400 hover:text-black leading-none">&times;</button>
@@ -589,7 +605,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         </div>
                     </div>
 
-                    {/* Touren Grid */}
                     <div className="p-6 md:p-12 max-w-7xl mx-auto w-full">
                         {filteredTours.length > 0 ? (
                             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
@@ -682,45 +697,128 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
 
-            {/* Modals für Angebote (mit Neuem Ideen Button) */}
+            {/* =========================================
+                MODAL FÜR ANGEBOTE (Mit Split-Screen Layout)
+               ========================================= */}
             {selectedAngebot && (
-                <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedAngebot(null)}></div>
-                    <div className="relative bg-white w-full h-full md:max-h-[90vh] md:max-w-2xl shadow-2xl overflow-y-auto fade-in flex flex-col">
-                        <div className="h-80 md:h-[40vh] relative flex-shrink-0">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
+                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedAngebot(null)}></div>
+                    
+                    <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
+                        
+                        <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
                             <img src={selectedAngebot.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
-                            <button onClick={() => setSelectedAngebot(null)} className="absolute top-6 right-6 text-white text-3xl z-10">&times;</button>
-                            <div className="absolute inset-0 bg-black/30 flex items-end p-8"><h2 className="serif text-4xl italic text-white">{selectedAngebot.title}</h2></div>
-                        </div>
-                        <div className="p-8 md:p-12 flex-1 flex flex-col">
-                            {bookingStatus ? ( <div className="text-center py-12 serif italic text-xl">{bookingStatus}</div> ) : (
-                                <div className="space-y-10 flex-1 flex flex-col">
-                                    <p className="text-zinc-600 text-sm leading-relaxed font-light">{selectedAngebot.longDesc}</p>
-                                    
-                                    <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
-                                        <h3 className="serif text-2xl italic mb-3">Benötigst du Ideen?</h3>
-                                        <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
-                                        <button onClick={() => { 
-                                            setSelectedAngebot(null); 
-                                            setFilterKategorie(selectedAngebot.title.includes('Klett') ? 'Klettern' : (selectedAngebot.title.includes('Hoch') ? 'Hochtour' : (selectedAngebot.title.includes('Ski') ? 'Skitour' : 'Alle')));
-                                            setIsIdeenBoardOpen(true); 
-                                        }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
-                                            Zu den Touren-Ideen
-                                        </button>
-                                    </div>
-
-                                    <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
-                                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Oder direkt anfragen:</h4>
-                                        <div className="grid grid-cols-2 gap-6">
-                                            <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                            <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                        </div>
-                                        <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                        <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent h-28" />
-                                        <button type="submit" className="w-full bg-black text-white py-5 text-[9px] uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all">Anfrage Senden</button>
-                                    </form>
+                            
+                            <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end pointer-events-none">
+                                <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)]"></div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
+                                <div className="relative z-[30] p-6 md:p-10">
+                                    <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedAngebot.title}</h2>
                                 </div>
-                            )}
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedAngebot(null); }} className="md:hidden fixed top-4 right-4 text-white text-3xl z-[60] bg-black/40 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
+                        </div>
+                        
+                        <div className="w-full md:w-1/2 h-auto md:h-full md:overflow-y-auto bg-white relative z-10 flex flex-col">
+                            <button onClick={() => { setSelectedAngebot(null); }} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
+                            
+                            <div className="p-6 md:p-10 lg:p-16 flex-1 flex flex-col">
+                                {bookingStatus ? ( <div className="text-center py-12 serif italic text-xl flex-1 flex flex-col items-center justify-center"><div className="text-4xl mb-6">✓</div>{bookingStatus}</div> ) : (
+                                    <div className="space-y-10 flex-1 flex flex-col">
+                                        <p className="text-zinc-600 text-base leading-relaxed font-light">{selectedAngebot.longDesc}</p>
+                                        
+                                        <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
+                                            <h3 className="serif text-2xl italic mb-3">Benötigst du Ideen?</h3>
+                                            <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
+                                            <button onClick={() => { 
+                                                setSelectedAngebot(null); 
+                                                setFilterKategorie(selectedAngebot.title.includes('Klett') ? 'Klettern' : (selectedAngebot.title.includes('Hoch') ? 'Hochtour' : (selectedAngebot.title.includes('Ski') ? 'Skitour' : 'Alle')));
+                                                setIsIdeenBoardOpen(true); 
+                                            }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
+                                                Zu den Touren-Ideen
+                                            </button>
+                                        </div>
+
+                                        <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
+                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Oder direkt eine Anfrage senden:</h4>
+                                            <div className="grid grid-cols-2 gap-6">
+                                                <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                            </div>
+                                            <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                            <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent h-28 resize-y" />
+                                            <button type="submit" className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">Anfrage Senden</button>
+                                        </form>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* =========================================
+                MODAL FÜR BERGFÜHRER (Mit Split-Screen Layout)
+               ========================================= */}
+            {selectedTeamMember && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
+                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedTeamMember(null)}></div>
+                    
+                    <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
+                        
+                        <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
+                            
+                            <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth" onScroll={() => setHasScrolledGallery(true)}>
+                                {(selectedTeamMember.images || (selectedTeamMember.image ? [selectedTeamMember.image] : [])).map((img, idx) => (
+                                    <div key={idx} onClick={() => setIsLightboxOpen(idx)} className="relative w-full h-full flex-shrink-0 snap-start cursor-pointer">
+                                        <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="hidden md:flex absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none items-center justify-center">
+                                <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
+                                    <Search size={14}/> Bilder ansehen
+                                </span>
+                            </div>
+
+                            <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end pointer-events-none">
+                                <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)]"></div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
+                                <div className="relative z-[30] p-6 md:p-10">
+                                    <p className="text-[10px] uppercase tracking-widest text-white/80 font-bold mb-2">{selectedTeamMember.title}</p>
+                                    <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedTeamMember.name}</h2>
+                                </div>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedTeamMember(null); }} className="md:hidden fixed top-4 right-4 text-white text-3xl z-[60] bg-black/40 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
+                        </div>
+                        
+                        <div className="w-full md:w-1/2 h-auto md:h-full md:overflow-y-auto bg-white relative z-10 flex flex-col">
+                            <button onClick={() => setSelectedTeamMember(null)} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
+                            
+                            <div className="p-6 md:p-10 lg:p-16 flex-1 flex flex-col">
+                                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Steckbrief</h3>
+                                <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line mb-8">{selectedTeamMember.desc}</p>
+                                
+                                <div className="space-y-6 pt-4 border-t border-zinc-100 flex-1">
+                                    <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                        <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Superkraft</span>
+                                        <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.superkraft}</span>
+                                    </div>
+                                    <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                        <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Kryptonit</span>
+                                        <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.schwaeche}</span>
+                                    </div>
+                                    <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
+                                        <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Touren-Snack</span>
+                                        <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.snack}</span>
+                                    </div>
+                                    <div className="grid grid-cols-12 gap-4">
+                                        <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Lebensmotto</span>
+                                        <span className="col-span-12 md:col-span-8 text-xs italic text-zinc-700 leading-relaxed">"{selectedTeamMember.zitat}"</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -921,61 +1019,28 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     </div>
                 </div>
             )}
-            
-            {/* Team Member Modal (Steckbrief) */}
-            {selectedTeamMember && (
-                <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 md:p-12 fade-in">
-                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm" onClick={() => setSelectedTeamMember(null)}></div>
-                    <div className="relative bg-white w-full max-w-4xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
-                        <div className="w-full md:w-5/12 h-[55vh] md:h-auto relative flex-shrink-0">
-                            <img src={selectedTeamMember.image} className="w-full h-full object-cover" alt={selectedTeamMember.name} />
-                            <button onClick={() => setSelectedTeamMember(null)} className="absolute top-4 right-4 text-white text-3xl z-10 md:hidden">&times;</button>
-                        </div>
-                        <div className="w-full md:w-7/12 p-8 md:p-12 bg-[#f9f9f7] overflow-y-auto relative">
-                            <button onClick={() => setSelectedTeamMember(null)} className="hidden md:block absolute top-6 right-8 text-zinc-400 hover:text-black text-4xl transition-colors">&times;</button>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{selectedTeamMember.title}</p>
-                            <h2 className="serif text-3xl md:text-4xl italic mb-6">{selectedTeamMember.name}</h2>
-                            <p className="text-sm text-zinc-600 font-light leading-relaxed mb-8">{selectedTeamMember.desc}</p>
-                            <div className="space-y-6 border-t border-zinc-200 pt-8">
-                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Superkraft</span>
-                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.superkraft}</span>
-                                </div>
-                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Kryptonit</span>
-                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.schwaeche}</span>
-                                </div>
-                                <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Touren-Snack</span>
-                                    <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed">{selectedTeamMember.snack}</span>
-                                </div>
-                                <div className="grid grid-cols-12 gap-4">
-                                    <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">Lebensmotto</span>
-                                    <span className="col-span-12 md:col-span-8 text-xs italic text-zinc-700 leading-relaxed">"{selectedTeamMember.zitat}"</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
-            {/* Vollbild Lightbox mit Touch/Swipe */}
-            {isLightboxOpen !== null && selectedTour && (
+            {/* Vollbild Lightbox mit Touch/Swipe (Kombiniert für Touren & Team) */}
+            {isLightboxOpen !== null && (selectedTour || selectedTeamMember) && (() => {
+                const activeItem = selectedTour || selectedTeamMember;
+                const imgs = activeItem.images || (activeItem.image ? [activeItem.image] : []);
+                
+                return (
                 <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center fade-in">
                     <div className="absolute inset-0" onClick={() => setIsLightboxOpen(null)}></div>
                     <button onClick={() => setIsLightboxOpen(null)} className="absolute top-4 right-4 md:top-8 md:right-8 text-white text-4xl md:text-5xl z-[350] w-12 h-12 flex items-center justify-center bg-black/40 rounded-full md:bg-transparent md:w-auto md:h-auto">&times;</button>
                     
                     {/* --- MOBILE GALLERY (Native Scroll) --- */}
                     <div className="md:hidden absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar items-center z-[310]" onScroll={() => setHasScrolledGallery(true)}>
-                        {(!hasScrolledGallery && (selectedTour.images || [selectedTour.image]).length > 1) && (
+                        {(!hasScrolledGallery && imgs.length > 1) && (
                             <div className="absolute inset-0 z-[350] flex items-center justify-center pointer-events-none">
                                 <div className="bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full text-xs uppercase tracking-widest flex items-center gap-3 animate-swipe-hint">
                                     <Hand size={18}/> Bilder wischen
                                 </div>
                             </div>
                         )}
-                        {(selectedTour.images || [selectedTour.image]).map((img, idx, arr) => (
-                            <div key={idx} id={`gallery-img-${idx}`} className={`relative h-auto max-h-[85vh] flex-shrink-0 snap-center flex items-center justify-center ${arr.length > 1 ? 'w-[85%] px-2' : 'w-full'}`}>
+                        {imgs.map((img, idx) => (
+                            <div key={idx} id={`gallery-img-${idx}`} className={`relative h-auto max-h-[85vh] flex-shrink-0 snap-center flex items-center justify-center ${imgs.length > 1 ? 'w-[85%] px-2' : 'w-full'}`}>
                                 <img src={img} loading="lazy" decoding="async" className="max-w-full max-h-[85vh] object-contain shadow-2xl pointer-events-none" alt="" />
                             </div>
                         ))}
@@ -983,7 +1048,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
                     {/* --- DESKTOP GALLERY (Arrows) --- */}
                     {(() => {
-                        const imgs = selectedTour.images || [selectedTour.image];
                         if (imgs.length <= 1) return (
                             <div className="hidden md:flex relative max-w-full max-h-full items-center justify-center z-[310] p-12 pointer-events-none">
                                 <img src={imgs[0]} className="max-w-full max-h-full object-contain shadow-2xl" alt="" />
@@ -1010,7 +1074,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         );
                     })()}
                 </div>
-            )}
+                );
+            })()}
         </div>
     );
 }

@@ -26,7 +26,6 @@ const storage = getStorage(app);
 
 const KANBAN_COLUMNS = ['Offen', 'In Bearbeitung', 'Blockiert', 'Erledigt'];
 
-// --- Hilfsfunktionen für Fallbacks bei alten Tourendaten ---
 const getKat = (t) => {
     if (!t) return 'Hochtour';
     if (t.kategorie) return t.kategorie;
@@ -35,6 +34,13 @@ const getKat = (t) => {
 };
 const getTech = (t) => t && t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t && t.ausdauer ? Number(t.ausdauer) : 2;
+
+// Hardcoded Fallback für die Initialisierung
+const TEAM_FALLBACK = [
+    { name: "ADRIAN BÜSCHLEN", title: "BERGFÜHRER IVBV", desc: "Skifanatiker und Bergführer aus Leidenschaft.", superkraft: "Findet im dichtesten Nebel zielsicher die Kaffeemaschine der Hütte.", schwaeche: "Wird 'grumpy', wenn der Gipfelschnaps im Tal vergessen wurde.", snack: "Getrocknete Mangos & Appenzeller Biberli", zitat: "Steiler ist geiler.", visible: true },
+    { name: "JENS Schärer", title: "BERGFÜHRER IVBV", desc: "Spezialist für Eisklettern und winterliche Expeditionen.", superkraft: "Hat eine eingebaute Heizspirale in den Fingern (friert nie beim Eisklettern).", schwaeche: "Vergisst immer, wo er die Stirnlampe hingelegt hat (meistens auf dem Kopf).", snack: "Käse. Einfach nur ein riesiges Stück Bergkäse.", zitat: "Eis ist auch nur Wasser mit Haltung.", visible: true },
+    { name: "MATTHIAS Bettschen", title: "BERGFÜHRER IVBV", desc: "Kletterexperte im Granit und Kalk.", superkraft: "Findet an einer aalglatten Felswand noch einen Hook für den kleinen Zeh.", schwaeche: "Kann an keiner Engadiner Dorfbäckerei vorbeigehen, ohne eine Nusstorte zu kaufen.", snack: "Engadiner Nusstorte (was sonst?)", zitat: "Ruhe bewahren und weiterklettern.", visible: true }
+];
 
 export default function AdminArea({ user, touren, onLogout }) {
   const [adminSubView, setAdminSubView] = useState('dashboard');
@@ -47,12 +53,12 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [docs, setDocs] = useState([]);
   const [protocols, setProtocols] = useState([]);
   const [logs, setLogs] = useState([]); 
+  const [teamProfiles, setTeamProfiles] = useState([]);
   
   // Dynamische Settings
   const [docKategorien, setDocKategorien] = useState(['Rechnungen', 'Konzepte', 'Sponsoring', 'Bilder']);
   const [docSubkategorien, setDocSubkategorien] = useState({});
   const [taskKategorien, setTaskKategorien] = useState(['Allgemein', 'Tourenplanung', 'Ausrüstung', 'Marketing', 'Finanzen']);
-  const [teamMembers, setTeamMembers] = useState(['Adrian', 'Jens', 'Matthias', 'Allgemein']);
   const [protocolKategorien, setProtocolKategorien] = useState(['Teamsitzung', 'Tourenplanung', 'Ideen']);
 
   // UI States
@@ -65,11 +71,11 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [editingTask, setEditingTask] = useState(null);
   const [editingDoc, setEditingDoc] = useState(null);
   const [editingProtocol, setEditingProtocol] = useState(null);
+  const [editingTeamMember, setEditingTeamMember] = useState(null);
   
   const [showDocKategorienModal, setShowDocKategorienModal] = useState(false);
   const [showTaskKategorienModal, setShowTaskKategorienModal] = useState(false);
   const [showProtocolKategorienModal, setShowProtocolKategorienModal] = useState(false);
-  const [neuesTeamMitglied, setNeuesTeamMitglied] = useState('');
   
   const [taskFilter, setTaskFilter] = useState('Alle');
   const [docFilter, setDocFilter] = useState('Alle');
@@ -81,8 +87,6 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [tourKatFilter, setTourKatFilter] = useState('Alle');
 
   const [isUploading, setIsUploading] = useState(false);
-  
-  // Drag & Drop States für Dokumente
   const [dragActive, setDragActive] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]);
 
@@ -95,6 +99,7 @@ export default function AdminArea({ user, touren, onLogout }) {
       onSnapshot(collection(db, 'tasks'), snap => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'docs'), snap => setDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'protocols'), snap => setProtocols(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+      onSnapshot(collection(db, 'team_profiles'), snap => setTeamProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'logs'), snap => {
           const fetchedLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           fetchedLogs.sort((a, b) => b.timestamp - a.timestamp); 
@@ -111,11 +116,14 @@ export default function AdminArea({ user, touren, onLogout }) {
           }
       }),
       onSnapshot(doc(db, 'settings', 'aufgaben'), snap => { if (snap.exists() && snap.data().kategorien) setTaskKategorien(snap.data().kategorien); }),
-      onSnapshot(doc(db, 'settings', 'protokolle'), snap => { if (snap.exists() && snap.data().kategorien) setProtocolKategorien(snap.data().kategorien); }),
-      onSnapshot(doc(db, 'settings', 'team'), snap => { if (snap.exists() && snap.data().mitglieder) setTeamMembers(snap.data().mitglieder); })
+      onSnapshot(doc(db, 'settings', 'protokolle'), snap => { if (snap.exists() && snap.data().kategorien) setProtocolKategorien(snap.data().kategorien); })
     ];
     return () => unsubs.forEach(unsub => unsub());
   }, [user]);
+
+  // Für Dropdowns: Beziehe Teammitglieder aus der Profile-Collection. Fallback, falls DB leer.
+  const activeTeamProfiles = teamProfiles.length > 0 ? teamProfiles : TEAM_FALLBACK.map((t, i) => ({ id: `mock-${i}`, ...t }));
+  const teamMemberNames = [...new Set([...activeTeamProfiles.map(t => t.name), 'Allgemein'])];
 
   const logAction = async (actionText) => {
     if (!user) return;
@@ -130,30 +138,22 @@ export default function AdminArea({ user, touren, onLogout }) {
 
   const kundenStamm = useMemo(() => {
     const map = {};
-    
     kundenNotizen.forEach(n => {
         const email = n.id.toLowerCase().trim();
-        if (!map[email]) {
-            map[email] = { email, vorname: '', name: '', phone: '', adresse: '', plz: '', ort: '', plz_ort_legacy: '', touren: [], anfragen: [] };
-        }
+        if (!map[email]) map[email] = { email, vorname: '', name: '', phone: '', adresse: '', plz: '', ort: '', plz_ort_legacy: '', touren: [], anfragen: [] };
     });
-
     const processItem = (item) => {
       if (!item.email) return;
       const email = item.email.toLowerCase().trim();
-      if (!map[email]) {
-          map[email] = { email, vorname: item.vorname || '', name: item.name || '', phone: item.phone || '', adresse: item.adresse || '', plz: '', ort: '', plz_ort_legacy: item.plz_ort || '', touren: [], anfragen: [] };
-      }
+      if (!map[email]) map[email] = { email, vorname: item.vorname || '', name: item.name || '', phone: item.phone || '', adresse: item.adresse || '', plz: '', ort: '', plz_ort_legacy: item.plz_ort || '', touren: [], anfragen: [] };
       if (item.adresse && !map[email].adresse) map[email].adresse = item.adresse;
       if (item.phone && !map[email].phone) map[email].phone = item.phone;
-      
       if (item.plz_ort && !map[email].plz && !map[email].ort) {
           const parts = item.plz_ort.trim().split(' ');
           map[email].plz = parts[0] || '';
           map[email].ort = parts.slice(1).join(' ') || '';
       }
     };
-    
     anmeldungen.forEach(a => { processItem(a); map[a.email.toLowerCase().trim()].touren.push(a); });
     anfragen.forEach(a => { processItem(a); map[a.email.toLowerCase().trim()].anfragen.push(a); });
 
@@ -161,14 +161,9 @@ export default function AdminArea({ user, touren, onLogout }) {
       const settings = kundenNotizen.find(n => n.id === k.email) || {};
       return { 
         ...k, 
-        vorname: settings.vorname || k.vorname,
-        name: settings.name || k.name,
-        phone: settings.phone || k.phone,
-        adresse: settings.adresse || k.adresse,
-        plz: settings.plz || k.plz,
-        ort: settings.ort || k.ort,
-        stammkunde_von: settings.stammkunde_von || '',
-        newsletter: settings.newsletter !== undefined ? settings.newsletter : true, 
+        vorname: settings.vorname || k.vorname, name: settings.name || k.name, phone: settings.phone || k.phone,
+        adresse: settings.adresse || k.adresse, plz: settings.plz || k.plz, ort: settings.ort || k.ort,
+        stammkunde_von: settings.stammkunde_von || '', newsletter: settings.newsletter !== undefined ? settings.newsletter : true, 
         notizText: settings.text || '' 
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
@@ -206,6 +201,65 @@ export default function AdminArea({ user, touren, onLogout }) {
     catch (e) { console.error("Fehler", e); }
   };
 
+  // --- SAVE TEAM MEMBER ---
+  const saveTeamMember = async (e) => {
+    e.preventDefault();
+    setIsUploading(true);
+    const fd = new FormData(e.target);
+    const imageFiles = fd.getAll('team_files');
+    let imageUrls = [];
+
+    const name = fd.get('name');
+    const safeNameFolder = name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'team';
+
+    try {
+        if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
+            const uploadPromises = Array.from(imageFiles).map(async (file) => {
+                const storageRef = ref(storage, `team/${safeNameFolder}/${Date.now()}-${file.name}`);
+                const snapshot = await uploadBytes(storageRef, file);
+                return await getDownloadURL(snapshot.ref);
+            });
+            imageUrls = await Promise.all(uploadPromises);
+        }
+        
+        const isMock = editingTeamMember && editingTeamMember.id ? editingTeamMember.id.startsWith('mock-') : false;
+        const combinedImages = [...(editingTeamMember.images || []), ...imageUrls];
+
+        const data = {
+            name: name,
+            title: fd.get('title'),
+            desc: fd.get('desc'),
+            superkraft: fd.get('superkraft'),
+            schwaeche: fd.get('schwaeche'),
+            snack: fd.get('snack'),
+            zitat: fd.get('zitat'),
+            visible: editingTeamMember.visible !== false,
+            image: combinedImages[0] || '/adrian.jpg', 
+            images: combinedImages
+        };
+
+        if (editingTeamMember && editingTeamMember.id && !isMock) {
+            await updateDoc(doc(db, 'team_profiles', editingTeamMember.id), data);
+            logAction(`Teammitglied aktualisiert: ${data.name}`);
+        } else {
+            await addDoc(collection(db, 'team_profiles'), data);
+            logAction(`Neues Teammitglied erstellt: ${data.name}`);
+        }
+        setEditingTeamMember(null);
+    } catch (err) { alert("Fehler beim Speichern."); } 
+    finally { setIsUploading(false); }
+  };
+
+  const deleteTeamMember = async (id, name) => {
+      if (id.startsWith('mock-')) return alert("Mock-Daten können nicht gelöscht werden.");
+      if (!confirm(`Teammitglied "${name}" wirklich löschen?`)) return;
+      try {
+          await deleteDoc(doc(db, 'team_profiles', id));
+          logAction(`Teammitglied gelöscht: ${name}`);
+      } catch (e) { alert("Fehler beim Löschen."); }
+  };
+
+  // --- SAVE TOUR ---
   const saveTour = async (e) => {
     e.preventDefault();
     setIsUploading(true);
@@ -216,7 +270,6 @@ export default function AdminArea({ user, touren, onLogout }) {
     const tourTitle = fd.get('title');
     const safeTitleFolder = tourTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'tour';
 
-    // Status Logik
     const statusStr = fd.get('tour_status');
     let isVisible = true;
     let isExample = false;
@@ -224,7 +277,7 @@ export default function AdminArea({ user, touren, onLogout }) {
     if (statusStr === 'hidden') {
         isVisible = false;
     } else if (statusStr === 'example') {
-        isVisible = true; // Beispieltouren sind technisch sichtbar, werden aber speziell gefiltert
+        isVisible = true; 
         isExample = true;
     }
 
@@ -245,9 +298,9 @@ export default function AdminArea({ user, touren, onLogout }) {
             title: tourTitle, 
             visible: isVisible,
             isExample: isExample,
-            date: fd.get('date') || '', // Optional bei Ideen
+            date: fd.get('date') || '',
             description: fd.get('description'), 
-            price: fd.get('price') || '', // Optional bei Ideen
+            price: fd.get('price') || '', 
             leistungen: fd.get('leistungen') || '',
             anforderungen: fd.get('anforderungen') || '', 
             ablauf: fd.get('ablauf') || '', 
@@ -286,6 +339,7 @@ export default function AdminArea({ user, touren, onLogout }) {
       } catch (e) { alert("Fehler beim Löschen."); }
   };
 
+  // --- SAVE TASK / DOC / PROTOCOL ---
   const saveTask = async (taskData, fileObject) => {
     setIsUploading(true);
     let fileUrl = taskData.fileUrl || null;
@@ -507,39 +561,115 @@ export default function AdminArea({ user, touren, onLogout }) {
               </div>
             )}
 
+            {/* TEAM PROFILES ADMIN */}
             {adminSubView === 'team' && (
-                <div className="fade-in max-w-3xl">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                        <h3 className="serif text-3xl italic">Internes Team verwalten</h3>
+                <div className="fade-in max-w-6xl mx-auto w-full">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <h3 className="serif text-3xl italic">Internes Team & Bergführer</h3>
+                        <button onClick={() => setEditingTeamMember({ name: '', title: 'BERGFÜHRER IVBV', desc: '', superkraft: '', schwaeche: '', snack: '', zitat: '', visible: true })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neues Profil erstellen</button>
                     </div>
-                    <p className="text-sm text-zinc-500 mb-8">Verwalte hier die Personen in eurem Team. Diese Namen stehen anschliessend in den Dropdowns für "Zuständig" bei den Aufgaben, Anfragen und als Stamm-Bergführer im Kundenstamm zur Auswahl.</p>
-                    
-                    <div className="space-y-2 mb-8">
-                        {teamMembers.map((member, i) => (
-                            <div key={i} className="flex justify-between items-center p-4 bg-zinc-50 border border-zinc-200">
-                                <span className="text-sm font-bold uppercase tracking-widest">{member}</span>
-                                <button onClick={async () => {
-                                    if(confirm(`${member} wirklich entfernen?`)) {
-                                        await setDoc(doc(db, 'settings', 'team'), { mitglieder: teamMembers.filter(m => m !== member) }, { merge: true });
-                                        logAction(`Teammitglied entfernt: ${member}`);
-                                    }
-                                }} className="text-zinc-400 hover:text-red-500 transition"><Trash2 size={16}/></button>
+
+                    {editingTeamMember ? (
+                        <form onSubmit={saveTeamMember} className="space-y-8 bg-zinc-50 p-5 md:p-8 border border-zinc-200 shadow-sm fade-in">
+                            <div className="flex justify-between items-center border-b border-zinc-200 pb-4 mb-6">
+                                <h3 className="serif text-2xl italic">{editingTeamMember.id ? 'Profil bearbeiten' : 'Neues Profil'}</h3>
                             </div>
-                        ))}
-                        {teamMembers.length === 0 && <p className="text-xs text-zinc-400 italic py-4">Noch keine Teammitglieder erfasst.</p>}
-                    </div>
-                    
-                    <form onSubmit={async (e) => {
-                        e.preventDefault();
-                        if(neuesTeamMitglied.trim() && !teamMembers.includes(neuesTeamMitglied.trim())) {
-                            await setDoc(doc(db, 'settings', 'team'), { mitglieder: [...teamMembers, neuesTeamMitglied.trim()] }, { merge: true });
-                            logAction(`Teammitglied hinzugefügt: ${neuesTeamMitglied.trim()}`);
-                            setNeuesTeamMitglied('');
-                        }
-                    }} className="flex flex-col sm:flex-row gap-4 p-4 border border-zinc-100 bg-[#f9f9f7]">
-                        <input value={neuesTeamMitglied} onChange={e => setNeuesTeamMitglied(e.target.value)} placeholder="Neues Teammitglied (Name)..." className="flex-1 border border-zinc-200 p-3 text-sm outline-none bg-white" />
-                        <button type="submit" className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest w-full sm:w-auto">Hinzufügen</button>
-                    </form>
+                            
+                            <div className="grid md:grid-cols-2 gap-8">
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Name</label><input name="name" defaultValue={editingTeamMember.name} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel / Ausbildung</label><input name="title" defaultValue={editingTeamMember.title} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
+                                
+                                <div className="flex items-center h-full pt-4 md:col-span-2">
+                                    <label className="relative flex items-center gap-4 bg-white p-5 border border-zinc-300 hover:border-black transition w-full cursor-pointer select-none group">
+                                        <div className="relative flex items-center justify-center w-6 h-6 flex-shrink-0">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={editingTeamMember.visible !== false} 
+                                                onChange={(e) => setEditingTeamMember({ ...editingTeamMember, visible: e.target.checked })} 
+                                                className="peer appearance-none w-full h-full border-2 border-zinc-300 rounded-none bg-white checked:bg-black checked:border-black transition-all cursor-pointer m-0" 
+                                            />
+                                            <svg className="absolute w-4 h-4 text-white pointer-events-none hidden peer-checked:block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        </div>
+                                        <span className="text-sm font-bold uppercase tracking-widest text-zinc-600 group-hover:text-black transition">Profil auf Webseite anzeigen (Bergführer-Seite)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div className="pt-6 border-t border-zinc-200 md:col-span-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Profilbilder (Erstes Bild = Avatar)</label>
+                                
+                                <div className="flex flex-wrap gap-4 mb-4">
+                                    {(editingTeamMember.images || (editingTeamMember.image ? [editingTeamMember.image] : [])).map((imgUrl, idx) => (
+                                        <div key={idx} className="relative w-32 h-32 bg-zinc-100 border border-zinc-200 shadow-sm group/img">
+                                            <img src={imgUrl} alt="Profilbild" className="w-full h-full object-cover" />
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    const newImages = [...(editingTeamMember.images || [editingTeamMember.image])];
+                                                    newImages.splice(idx, 1);
+                                                    setEditingTeamMember({...editingTeamMember, images: newImages});
+                                                }}
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-10"
+                                                title="Bild entfernen"
+                                            >
+                                                <X size={14} strokeWidth={3} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {(editingTeamMember.images || (editingTeamMember.image ? [editingTeamMember.image] : [])).length === 0 && <p className="text-xs text-zinc-400 italic py-4">Noch keine Bilder hinzugefügt.</p>}
+                                </div>
+
+                                <div className="flex-1 border-2 border-dashed border-zinc-300 bg-zinc-50 hover:bg-zinc-100 hover:border-black transition cursor-pointer flex flex-col justify-center items-center relative min-h-[8rem] p-6 group">
+                                    <UploadCloud size={28} className="text-zinc-400 mb-3 group-hover:text-black transition" />
+                                    <span className="text-xs font-bold uppercase tracking-widest text-zinc-600 group-hover:text-black transition">Weitere Bilder hinzufügen</span>
+                                    <span className="text-[9px] text-zinc-500 mt-2 uppercase tracking-widest text-center leading-relaxed">Klicken oder Dateien hineinziehen<br/>(Mehrfachauswahl möglich)</span>
+                                    <input type="file" name="team_files" accept="image/*" multiple className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Beschreibung (Haupttext)</label>
+                                <textarea name="desc" defaultValue={editingTeamMember.desc} required className="w-full border border-zinc-300 p-5 text-base h-32 resize-y mt-2 outline-none focus:border-black transition" />
+                            </div>
+                            
+                            <div className="grid md:grid-cols-2 gap-8 pt-4 border-t border-zinc-200">
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Superkraft</label><textarea name="superkraft" defaultValue={editingTeamMember.superkraft} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" /></div>
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kryptonit / Schwäche</label><textarea name="schwaeche" defaultValue={editingTeamMember.schwaeche} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" /></div>
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Touren-Snack</label><textarea name="snack" defaultValue={editingTeamMember.snack} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" /></div>
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Lebensmotto / Zitat</label><textarea name="zitat" defaultValue={editingTeamMember.zitat} className="w-full border border-zinc-300 p-4 text-sm h-24 resize-y mt-2 outline-none focus:border-black transition" /></div>
+                            </div>
+
+                            <div className="flex flex-col-reverse sm:flex-row justify-end gap-4 pt-8 border-t border-zinc-200">
+                                <button type="button" onClick={() => setEditingTeamMember(null)} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
+                                <button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition text-center">{isUploading ? 'Lädt...' : 'Profil Speichern'}</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="space-y-4 fade-in">
+                            <p className="text-sm text-zinc-500 mb-8">Verwalte hier die Personen in eurem Team. Sichtbare Profile erscheinen im "Kollektiv" auf der Webseite. Alle Namen stehen zudem in den Dropdowns für "Zuständig" bei Aufgaben und Anfragen zur Verfügung.</p>
+                            
+                            {activeTeamProfiles.map(member => (
+                                <div key={member.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
+                                    <div className="flex items-center gap-6">
+                                        <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-100 flex-shrink-0">
+                                            {member.images || member.image ? <img src={(member.images || [member.image])[0]} className="w-full h-full object-cover" alt="" /> : <User className="w-full h-full p-3 text-zinc-300"/>}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center flex-wrap gap-2">
+                                                {member.name} 
+                                                {member.visible === false && <span className="text-red-500 bg-red-50 px-2 py-0.5 text-[8px]">[VERSTECKT]</span>}
+                                            </p>
+                                            <p className="text-xs text-zinc-500">{member.title}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
+                                        <button onClick={() => setEditingTeamMember({...member, images: member.images || (member.image ? [member.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
+                                        <button onClick={() => deleteTeamMember(member.id, member.name)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -650,7 +780,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                             <label className="text-[8px] font-bold uppercase tracking-widest text-zinc-400">Stammkunde bei (Zuweisung)</label>
                                                             <select name="stammkunde_von" defaultValue={currentKunde.stammkunde_von} className="w-full border border-zinc-200 p-3 text-xs uppercase tracking-widest outline-none bg-white cursor-pointer mt-1">
                                                                 <option value="">- Niemand speziell zugewiesen -</option>
-                                                                {teamMembers.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                {teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}
                                                             </select>
                                                         </div>
                                                         <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
@@ -768,7 +898,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                         className="border border-zinc-300 p-2 text-xs outline-none bg-white uppercase tracking-widest font-bold cursor-pointer hover:border-black transition w-full sm:w-auto"
                                     >
                                         <option value="">-- Frei / Niemand zugewiesen --</option>
-                                        {teamMembers.map(m => <option key={m} value={m}>{m}</option>)}
+                                        {teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}
                                     </select>
                                 </div>
                             </div>
@@ -785,7 +915,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                         <button onClick={() => setEditingTour({ title: '', visible: true, isExample: false, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', kategorie: 'Hochtour', technik: 2, ausdauer: 2 })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
                     </div>
 
-                    {/* FILTER BEREICH */}
                     {!editingTour && (
                         <div className="flex flex-col gap-4 mb-8 bg-zinc-50 p-4 md:p-6 border border-zinc-200">
                             <div className="flex flex-wrap gap-4 border-b border-zinc-200 pb-4">
@@ -820,7 +949,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <h3 className="serif text-2xl italic">{editingTour.id ? 'Tour bearbeiten' : 'Neue Tour anlegen'}</h3>
                             </div>
                             
-                            {/* NEU: Tour Status (Sichtbarkeit & Beispieltouren) */}
                             <div className="bg-white p-6 border border-zinc-300 shadow-sm md:col-span-2 mb-8">
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4 block">Sichtbarkeit & Status der Tour</label>
                                 <select 
@@ -968,7 +1096,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
-            {/* NEU: Anmeldungen komplett ohne horizontales Scrollen optimiert */}
             {adminSubView === 'anmeldungen' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
@@ -983,8 +1110,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                                         {title} <span className="text-zinc-400 font-normal ml-2 block md:inline mt-1 md:mt-0">({teilnehmer.length} gebucht)</span>
                                     </h4>
                                 </div>
-                                
-                                {/* Grid-basierte "Tabelle" - bricht auf Handys schön um */}
                                 <div className="w-full">
                                     <div className="hidden md:grid grid-cols-12 gap-4 bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-widest font-bold text-[10px] p-5">
                                         <div className="col-span-4">Name & Adresse</div>
@@ -1024,7 +1149,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
-            {/* AUFGABEN (KANBAN) - Für Mobile vertikal gestapelt */}
             {adminSubView === 'aufgaben' && (
                 <div className="fade-in flex flex-col h-full w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -1037,7 +1161,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                     <div className="flex flex-wrap gap-2 mb-8 border-b border-zinc-100 pb-4 w-full">
                         {['Alle', ...taskKategorien].map(c => <button key={c} onClick={() => setTaskFilter(c)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${taskFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
                     </div>
-                    {/* flex-col für Mobile, overflow-x-auto nur ab md Breakpoint */}
                     <div className="flex flex-col md:flex-row gap-6 md:gap-8 md:overflow-x-auto pb-6 items-stretch md:items-start w-full">
                         {KANBAN_COLUMNS.map(col => (
                             <div key={col} className="w-full md:w-80 flex-shrink-0 bg-zinc-50 border border-zinc-200 p-5 rounded-sm">
@@ -1066,7 +1189,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
-            {/* NEU: Dokumentablage als responsive Grid statt starrer Tabelle */}
             {adminSubView === 'dokumente' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8"><h3 className="serif text-3xl italic">Zentrale Dokumente</h3>
@@ -1088,7 +1210,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                         )}
                     </div>
                     
-                    {/* Grid-Ansicht der Dokumente für perfekte Lesbarkeit auf Handy */}
                     <div className="bg-white border border-zinc-200 w-full">
                         <div className="hidden md:grid grid-cols-12 gap-4 bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-widest font-bold text-[10px] p-5">
                             <div className="col-span-6">Dateiname</div>
@@ -1292,7 +1413,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                         </div>
                         <div>
                             <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Zuständig</label>
-                            <select value={editingTask.assignee || ''} onChange={e => setEditingTask({...editingTask, assignee: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer"><option value="">-- Frei --</option>{teamMembers.map(a => <option key={a}>{a}</option>)}</select>
+                            <select value={editingTask.assignee || ''} onChange={e => setEditingTask({...editingTask, assignee: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer"><option value="">-- Frei --</option>{teamMemberNames.map(a => <option key={a}>{a}</option>)}</select>
                         </div>
                     </div>
                     
@@ -1409,7 +1530,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     <div className="w-full sm:w-48 flex gap-2 items-end">
                                         <div className="flex-1">
                                             <label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Wer machts?</label>
-                                            <select value={d.assignee || ''} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].assignee = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition bg-white"><option value="">Zuständig...</option>{teamMembers.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                                            <select value={d.assignee || ''} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].assignee = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition bg-white"><option value="">Zuständig...</option>{teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}</select>
                                         </div>
                                         <button type="button" onClick={() => { const nd = [...editingProtocol.decisions]; nd.splice(i,1); setEditingProtocol({...editingProtocol, decisions: nd}); }} className="text-zinc-400 hover:text-red-500 p-3 transition bg-white border border-zinc-300 sm:border-0 sm:bg-transparent flex-shrink-0"><Trash2 size={18}/></button>
                                     </div>
