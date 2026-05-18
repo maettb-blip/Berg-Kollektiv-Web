@@ -26,6 +26,33 @@ const storage = getStorage(app);
 
 const KANBAN_COLUMNS = ['Offen', 'In Bearbeitung', 'Blockiert', 'Erledigt'];
 
+// --- BILD-KOMPRESSION HELPER ---
+const loadCompressor = () => new Promise((resolve, reject) => {
+    if (window.imageCompression) return resolve(window.imageCompression);
+    const script = document.createElement('script');
+    script.src = "https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js";
+    script.onload = () => resolve(window.imageCompression);
+    script.onerror = reject;
+    document.head.appendChild(script);
+});
+
+const compressImage = async (file) => {
+    // Nur Bilder komprimieren, PDFs etc. ignorieren
+    if (!file.type.startsWith('image/')) return file;
+    try {
+        const imageCompression = await loadCompressor();
+        const options = { 
+            maxSizeMB: 1,            // Max. Dateigrösse 1 MB
+            maxWidthOrHeight: 1920,  // Max. Auflösung 1920px (Full HD)
+            useWebWorker: true 
+        };
+        return await imageCompression(file, options);
+    } catch (error) {
+        console.error("Kompression fehlgeschlagen, lade Original hoch:", error);
+        return file;
+    }
+};
+
 const DEFAULT_ANGEBOTE = [
     { id: "mock-s1", title: "Hochtouren", season: "Sommer", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen.", image: "/hochtour.jpg" },
     { id: "mock-s2", title: "Alpinklettern", season: "Sommer", desc: "In den besten Granit- und Kalkwänden der Schweiz.", longDesc: "Mehrseillängen-Träume in bestem Fels. Von der Furka bis ins Bergell – wir finden die perfekte Linie für dein Level.", image: "/alpinklettern.jpg" },
@@ -236,8 +263,9 @@ export default function AdminArea({ user, touren, onLogout }) {
     try {
         if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
             const uploadPromises = Array.from(imageFiles).map(async (file) => {
-                const storageRef = ref(storage, `angebote/${safeNameFolder}/${Date.now()}-${file.name}`);
-                const snapshot = await uploadBytes(storageRef, file);
+                const compressedFile = await compressImage(file);
+                const storageRef = ref(storage, `angebote/${safeNameFolder}/${Date.now()}-${compressedFile.name}`);
+                const snapshot = await uploadBytes(storageRef, compressedFile);
                 return await getDownloadURL(snapshot.ref);
             });
             imageUrls = await Promise.all(uploadPromises);
@@ -295,8 +323,9 @@ export default function AdminArea({ user, touren, onLogout }) {
     try {
         if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
             const uploadPromises = Array.from(imageFiles).map(async (file) => {
-                const storageRef = ref(storage, `team/${safeNameFolder}/${Date.now()}-${file.name}`);
-                const snapshot = await uploadBytes(storageRef, file);
+                const compressedFile = await compressImage(file);
+                const storageRef = ref(storage, `team/${safeNameFolder}/${Date.now()}-${compressedFile.name}`);
+                const snapshot = await uploadBytes(storageRef, compressedFile);
                 return await getDownloadURL(snapshot.ref);
             });
             imageUrls = await Promise.all(uploadPromises);
@@ -394,8 +423,9 @@ export default function AdminArea({ user, touren, onLogout }) {
     try {
         if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
             const uploadPromises = Array.from(imageFiles).map(async (file) => {
-                const storageRef = ref(storage, `touren/${safeTitleFolder}/${Date.now()}-${file.name}`);
-                const snapshot = await uploadBytes(storageRef, file);
+                const compressedFile = await compressImage(file);
+                const storageRef = ref(storage, `touren/${safeTitleFolder}/${Date.now()}-${compressedFile.name}`);
+                const snapshot = await uploadBytes(storageRef, compressedFile);
                 return await getDownloadURL(snapshot.ref);
             });
             imageUrls = await Promise.all(uploadPromises);
@@ -494,12 +524,13 @@ export default function AdminArea({ user, touren, onLogout }) {
                 await addDoc(collection(db, 'docs'), { name, category, subcategory, isLink: true, url: fd.get('url'), size: 'Web-Link', createdAt: Date.now() });
                 logAction(`Link hinzugefügt: ${name}`);
             } else {
-                for (const file of uploadFiles) {
-                    const fileRef = ref(storage, `docs/${Date.now()}_${file.name}`);
-                    await uploadBytes(fileRef, file);
+                for (let file of uploadFiles) {
+                    const compressedFile = await compressImage(file);
+                    const fileRef = ref(storage, `docs/${Date.now()}_${compressedFile.name}`);
+                    await uploadBytes(fileRef, compressedFile);
                     const url = await getDownloadURL(fileRef);
-                    const size = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
-                    const docName = uploadFiles.length > 1 ? file.name : (name || file.name);
+                    const size = `${(compressedFile.size / (1024 * 1024)).toFixed(2)} MB`;
+                    const docName = uploadFiles.length > 1 ? compressedFile.name : (name || compressedFile.name);
                     await addDoc(collection(db, 'docs'), { name: docName, category, subcategory, isLink: false, url, size, createdAt: Date.now() });
                 }
                 logAction(`${uploadFiles.length} Dokument(e) hochgeladen`);
