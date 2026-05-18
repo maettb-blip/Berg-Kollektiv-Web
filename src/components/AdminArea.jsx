@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { 
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
   LayoutDashboard, User, Users, X, Edit, ExternalLink, Trash2, MapPin, 
-  FileText, Share2, Link as LinkIcon, UploadCloud, Lock
+  FileText, Share2, Link as LinkIcon, UploadCloud, Lock, Layers
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -20,17 +20,27 @@ const firebaseConfig = {
     measurementId: "G-J0YRE7EC1D"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const storage = getStorage(app);
 
 const KANBAN_COLUMNS = ['Offen', 'In Bearbeitung', 'Blockiert', 'Erledigt'];
 
-const getKat = (t) => {
-    if (!t) return 'Hochtour';
+const DEFAULT_ANGEBOTE = [
+    { id: "mock-s1", title: "Hochtouren", season: "Sommer", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen.", image: "/hochtour.jpg" },
+    { id: "mock-s2", title: "Alpinklettern", season: "Sommer", desc: "In den besten Granit- und Kalkwänden der Schweiz.", longDesc: "Mehrseillängen-Träume in bestem Fels. Von der Furka bis ins Bergell – wir finden die perfekte Linie für dein Level.", image: "/alpinklettern.jpg" },
+    { id: "mock-s3", title: "Kletterkurse", season: "Sommer", desc: "Vom ersten Griff in der Halle bis zum Vorstieg im Fels.", longDesc: "Sicherheit steht an erster Stelle. Wir vermitteln dir das nötige Know-how in Seiltechnik, Standplatzbau und Vorstiegstaktik.", image: "/kletterkurs.jpg" },
+    { id: "mock-s4", title: "Gratüberschreitungen", season: "Sommer", desc: "Luftige Grate und endlose Aussichten.", longDesc: "Die eleganteste Art, einen Gipfel zu besteigen. Klassiker wie der Eiger- oder Biancograt warten auf dich.", image: "/grat.jpg" },
+    { id: "mock-w1", title: "Skitouren", season: "Winter", desc: "Unberührter Pulverschnee und einsame Gipfelerlebnisse.", longDesc: "Vom Berner Oberland bis ins Wallis – wir finden für dich den besten Powder und unverspurte Hänge fernab der Massen.", image: "/skitour.jpg" },
+    { id: "mock-w2", title: "Eisklettern", season: "Winter", desc: "Die faszinierende Welt der gefrorenen Wasserfälle.", longDesc: "Steile Eiszapfen und blaues Eis. Wir zeigen dir die richtige Schlagtechnik und den Standplatzbau.", image: "/eisklettern.jpg" },
+    { id: "mock-w3", title: "Freeriden", season: "Winter", desc: "Die besten Lines in den Alpen mit Fokus auf Sicherheit.", longDesc: "Maximale Abfahrt bei minimalem Aufstieg. Wir nutzen die Bergbahnen und zeigen dir die versteckten Runs.", image: "/freeride.jpg" },
+    { id: "mock-w4", title: "Lawinenkurse", season: "Winter", desc: "Fundiertes Wissen für deine Sicherheit im Backcountry.", longDesc: "Prävention, Beobachtung und Rettung. Ein essenzieller Kurs für alle, die sich im Winter abseits der Pisten bewegen.", image: "/lawine.jpg" }
+];
+
+const getKat = (t, defaultCats) => {
+    if (!t) return defaultCats[0] || 'Hochtour';
     if (t.kategorie) return t.kategorie;
-    const title = (t.title || '').toLowerCase();
-    return title.includes('kurs') ? 'Kurse' : title.includes('ski') ? 'Skitour' : title.includes('klett') ? 'Klettern' : 'Hochtour';
+    return defaultCats[0] || 'Hochtour';
 };
 const getTech = (t) => t && t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t && t.ausdauer ? Number(t.ausdauer) : 2;
@@ -48,6 +58,7 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [logs, setLogs] = useState([]); 
   const [teamProfiles, setTeamProfiles] = useState([]);
   const [materialLists, setMaterialLists] = useState([]);
+  const [angebote, setAngebote] = useState([]);
   
   // Dynamische Settings
   const [docKategorien, setDocKategorien] = useState(['Rechnungen', 'Konzepte', 'Sponsoring', 'Bilder']);
@@ -56,8 +67,9 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [protocolKategorien, setProtocolKategorien] = useState(['Teamsitzung', 'Tourenplanung', 'Ideen']);
   const [teamAttributes, setTeamAttributes] = useState([]); 
 
-  // Aktive Attribute definieren (Fallback falls DB leer ist)
   const activeTeamAttributes = teamAttributes.length > 0 ? teamAttributes : ['Superkraft', 'Kryptonit', 'Touren-Snack', 'Lebensmotto'];
+  const activeAngebote = angebote.length > 0 ? angebote : DEFAULT_ANGEBOTE;
+  const tourKategorien = [...new Set(activeAngebote.map(a => a.title))];
 
   // UI States
   const [selectedKunde, setSelectedKunde] = useState(null);
@@ -70,6 +82,7 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [editingDoc, setEditingDoc] = useState(null);
   const [editingProtocol, setEditingProtocol] = useState(null);
   const [editingTeamMember, setEditingTeamMember] = useState(null);
+  const [editingAngebot, setEditingAngebot] = useState(null);
   
   const [showDocKategorienModal, setShowDocKategorienModal] = useState(false);
   const [showTaskKategorienModal, setShowTaskKategorienModal] = useState(false);
@@ -99,6 +112,7 @@ export default function AdminArea({ user, touren, onLogout }) {
       onSnapshot(collection(db, 'protocols'), snap => setProtocols(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'team_profiles'), snap => setTeamProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'material_lists'), snap => setMaterialLists(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+      onSnapshot(collection(db, 'angebote'), snap => setAngebote(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'logs'), snap => {
           const fetchedLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           fetchedLogs.sort((a, b) => b.timestamp - a.timestamp); 
@@ -206,6 +220,60 @@ export default function AdminArea({ user, touren, onLogout }) {
       if (attr === 'Touren-Snack') return member.snack || '';
       if (attr === 'Lebensmotto') return member.zitat || '';
       return '';
+  };
+
+  // --- SAVE ANGEBOT ---
+  const saveAngebot = async (e) => {
+    e.preventDefault();
+    setIsUploading(true);
+    const fd = new FormData(e.target);
+    const imageFiles = fd.getAll('angebot_files');
+    let imageUrls = [];
+
+    const title = fd.get('title');
+    const safeNameFolder = title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'angebot';
+
+    try {
+        if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
+            const uploadPromises = Array.from(imageFiles).map(async (file) => {
+                const storageRef = ref(storage, `angebote/${safeNameFolder}/${Date.now()}-${file.name}`);
+                const snapshot = await uploadBytes(storageRef, file);
+                return await getDownloadURL(snapshot.ref);
+            });
+            imageUrls = await Promise.all(uploadPromises);
+        }
+        
+        const isMock = editingAngebot && editingAngebot.id ? editingAngebot.id.startsWith('mock-') : false;
+        const combinedImages = [...(editingAngebot.images || []), ...imageUrls];
+
+        const data = {
+            title: title,
+            season: fd.get('season'),
+            desc: fd.get('desc'),
+            longDesc: fd.get('longDesc'),
+            image: combinedImages[0] || (editingAngebot ? editingAngebot.image : ''), 
+            images: combinedImages
+        };
+
+        if (editingAngebot && editingAngebot.id && !isMock) {
+            await updateDoc(doc(db, 'angebote', editingAngebot.id), data);
+            logAction(`Angebot aktualisiert: ${data.title}`);
+        } else {
+            await addDoc(collection(db, 'angebote'), data);
+            logAction(`Neues Angebot erstellt: ${data.title}`);
+        }
+        setEditingAngebot(null);
+    } catch (err) { alert("Fehler beim Speichern."); } 
+    finally { setIsUploading(false); }
+  };
+
+  const deleteAngebot = async (id, title) => {
+      if (id.startsWith('mock-')) return alert("Mock-Daten können nicht gelöscht werden.");
+      if (!confirm(`Angebot "${title}" wirklich löschen?`)) return;
+      try {
+          await deleteDoc(doc(db, 'angebote', id));
+          logAction(`Angebot gelöscht: ${title}`);
+      } catch (e) { alert("Fehler beim Löschen."); }
   };
 
   // --- SAVE TEAM MEMBER ---
@@ -352,7 +420,7 @@ export default function AdminArea({ user, touren, onLogout }) {
             materialUrl: selectedMaterial ? selectedMaterial.url : '',
             guide: fd.get('guide') || '',
             interneNotizen: fd.get('interneNotizen') || '',
-            kategorie: fd.get('kategorie') || 'Hochtour',
+            kategorie: fd.get('kategorie') || tourKategorien[0] || 'Hochtour',
             technik: parseInt(fd.get('technik')) || 2,
             ausdauer: parseInt(fd.get('ausdauer')) || 2,
             
@@ -543,7 +611,14 @@ export default function AdminArea({ user, touren, onLogout }) {
             <h2 className="serif text-2xl italic mb-8">Workspace</h2>
             <div className="space-y-1 mb-8">
               <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2 px-4">Kunden & Website</p>
-              {[ { id: 'dashboard', label: 'Übersicht', icon: LayoutDashboard }, { id: 'touren', label: 'Touren verwalten', icon: Settings }, { id: 'anmeldungen', label: 'Anmeldungen', icon: Share2 }, { id: 'anfragen', label: 'Anfragen', icon: Mail }, { id: 'kunden', label: 'Kundenstamm (CRM)', icon: User } ].map(item => (
+              {[ 
+                { id: 'dashboard', label: 'Übersicht', icon: LayoutDashboard }, 
+                { id: 'angebote', label: 'Angebote verwalten', icon: Layers },
+                { id: 'touren', label: 'Touren verwalten', icon: Settings }, 
+                { id: 'anmeldungen', label: 'Anmeldungen', icon: Share2 }, 
+                { id: 'anfragen', label: 'Anfragen', icon: Mail }, 
+                { id: 'kunden', label: 'Kundenstamm (CRM)', icon: User } 
+              ].map(item => (
                 <button key={item.id} onClick={() => { setAdminSubView(item.id); setSelectedKunde(null); setIsEditingKunde(false); }} className={`w-full text-left py-2 px-4 text-[10px] uppercase tracking-widest flex items-center gap-3 transition-all ${adminSubView === item.id ? 'bg-black text-white' : 'hover:bg-zinc-100'}`}>
                   <item.icon size={14}/> {item.label}
                 </button>
@@ -606,6 +681,99 @@ export default function AdminArea({ user, touren, onLogout }) {
                     </div>
                 </div>
               </div>
+            )}
+
+            {/* NEU: ANGEBOTE ADMIN */}
+            {adminSubView === 'angebote' && (
+                <div className="fade-in max-w-6xl mx-auto w-full">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <h3 className="serif text-3xl italic">Angebote (Kategorien) verwalten</h3>
+                        <button onClick={() => setEditingAngebot({ title: '', season: 'Sommer', desc: '', longDesc: '', image: '' })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neues Angebot</button>
+                    </div>
+
+                    {editingAngebot ? (
+                        <form onSubmit={saveAngebot} className="space-y-8 bg-zinc-50 p-5 md:p-8 border border-zinc-200 shadow-sm fade-in">
+                            <div className="flex justify-between items-center border-b border-zinc-200 pb-4 mb-6">
+                                <h3 className="serif text-2xl italic">{editingAngebot.id ? 'Angebot bearbeiten' : 'Neues Angebot'}</h3>
+                            </div>
+                            
+                            <div className="grid md:grid-cols-2 gap-8">
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel / Name der Kategorie</label><input name="title" defaultValue={editingAngebot.title} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Saison (Tab auf Webseite)</label>
+                                    <select name="season" defaultValue={editingAngebot.season} className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
+                                        <option value="Sommer">Sommer</option>
+                                        <option value="Winter">Winter</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div className="pt-6 border-t border-zinc-200">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Bilder für dieses Angebot</label>
+                                
+                                <div className="flex flex-wrap gap-4 mb-4">
+                                    {(editingAngebot.images || (editingAngebot.image ? [editingAngebot.image] : [])).map((imgUrl, idx) => (
+                                        <div key={idx} className="relative w-32 h-32 bg-zinc-100 border border-zinc-200 shadow-sm group/img">
+                                            <img src={imgUrl} alt="Angebotbild" className="w-full h-full object-cover" />
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    const newImages = [...(editingAngebot.images || (editingAngebot.image ? [editingAngebot.image] : []))];
+                                                    newImages.splice(idx, 1);
+                                                    setEditingAngebot({...editingAngebot, images: newImages});
+                                                }}
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-10"
+                                            >
+                                                <X size={14} strokeWidth={3} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {(editingAngebot.images || (editingAngebot.image ? [editingAngebot.image] : [])).length === 0 && <p className="text-xs text-zinc-400 italic py-4">Noch keine Bilder hinzugefügt.</p>}
+                                </div>
+
+                                <div className="flex-1 border-2 border-dashed border-zinc-300 bg-zinc-50 hover:bg-zinc-100 hover:border-black transition cursor-pointer flex flex-col justify-center items-center relative min-h-[8rem] p-6 group">
+                                    <UploadCloud size={28} className="text-zinc-400 mb-3 group-hover:text-black transition" />
+                                    <span className="text-xs font-bold uppercase tracking-widest text-zinc-600 group-hover:text-black transition">Weitere Bilder hinzufügen</span>
+                                    <input type="file" name="angebot_files" accept="image/*" multiple className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                </div>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-8 pt-4 border-t border-zinc-200">
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kurzbeschreibung (Übersicht)</label><textarea name="desc" defaultValue={editingAngebot.desc} className="w-full border border-zinc-300 p-4 text-sm h-32 resize-y mt-2 outline-none focus:border-black transition" /></div>
+                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Langer Text (Detailansicht)</label><textarea name="longDesc" defaultValue={editingAngebot.longDesc} className="w-full border border-zinc-300 p-4 text-sm h-32 resize-y mt-2 outline-none focus:border-black transition" /></div>
+                            </div>
+
+                            <div className="flex flex-col-reverse sm:flex-row justify-end gap-4 pt-8 border-t border-zinc-200">
+                                <button type="button" onClick={() => setEditingAngebot(null)} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
+                                <button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition text-center">{isUploading ? 'Lädt...' : 'Speichern'}</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="space-y-4 fade-in">
+                            <p className="text-sm text-zinc-500 mb-8">Diese Angebote erscheinen direkt auf der Hauptseite. Ihre Namen fungieren gleichzeitig als Kategorien für die einzelnen Touren.</p>
+                            
+                            {activeAngebote.map(angebot => (
+                                <div key={angebot.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
+                                    <div className="flex items-center gap-6">
+                                        <div className="w-16 h-12 overflow-hidden bg-zinc-100 flex-shrink-0">
+                                            {(angebot.images || angebot.image) ? <img src={(angebot.images || [angebot.image])[0]} className="w-full h-full object-cover" alt="" /> : <Layers className="w-full h-full p-3 text-zinc-300"/>}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center flex-wrap gap-2">
+                                                {angebot.title} 
+                                            </p>
+                                            <p className="text-xs text-zinc-500">Saison: {angebot.season}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
+                                        <button onClick={() => setEditingAngebot({...angebot, images: angebot.images || (angebot.image ? [angebot.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
+                                        <button onClick={() => deleteAngebot(angebot.id, angebot.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* TEAM PROFILES ADMIN */}
@@ -1018,7 +1186,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <h3 className="serif text-3xl italic">Touren Verwalten</h3>
-                        <button onClick={() => setEditingTour({ title: '', visible: true, isExample: false, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', kategorie: 'Hochtour', technik: 2, ausdauer: 2 })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
+                        <button onClick={() => setEditingTour({ title: '', visible: true, isExample: false, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', kategorie: tourKategorien[0] || 'Hochtour', technik: 2, ausdauer: 2 })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
                     </div>
 
                     {!editingTour && (
@@ -1036,7 +1204,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                             </div>
                             <div className="flex flex-wrap gap-2 items-center">
                                 <span className="text-[10px] uppercase tracking-widest text-zinc-400 mr-2 font-bold w-full sm:w-auto">Kategorie:</span>
-                                {['Alle', 'Hochtour', 'Skitour', 'Klettern', 'Kurse'].map(kat => (
+                                {['Alle', ...tourKategorien].map(kat => (
                                     <button 
                                         key={kat} 
                                         onClick={() => setTourKatFilter(kat)}
@@ -1104,7 +1272,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <div className="flex-1 border-2 border-dashed border-zinc-300 bg-zinc-50 hover:bg-zinc-100 hover:border-black transition cursor-pointer flex flex-col justify-center items-center relative min-h-[8rem] p-6 group">
                                     <UploadCloud size={28} className="text-zinc-400 mb-3 group-hover:text-black transition" />
                                     <span className="text-xs font-bold uppercase tracking-widest text-zinc-600 group-hover:text-black transition">Weitere Bilder hinzufügen</span>
-                                    <span className="text-[9px] text-zinc-500 mt-2 uppercase tracking-widest text-center leading-relaxed">Klicken oder Dateien hineinziehen<br/>(Mehrfachauswahl möglich)</span>
+                                    <span className="text-[9px] text-zinc-500 mt-2 uppercase tracking-widest text-center leading-relaxed">Klicken oder Dateien hineinziehen<br/>(Mehrfachauswahl möglich - Bilder werden der Liste hinzugefügt)</span>
                                     <input type="file" name="tour_files" accept="image/*" multiple className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                                 </div>
                             </div>
@@ -1129,11 +1297,9 @@ export default function AdminArea({ user, touren, onLogout }) {
                             <div className="grid md:grid-cols-3 gap-6 pt-6 border-t border-zinc-200">
                                 <div>
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Hauptkategorie</label>
-                                    <select name="kategorie" defaultValue={getKat(editingTour)} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
-                                        <option value="Hochtour">Hochtour</option>
-                                        <option value="Skitour">Skitour</option>
-                                        <option value="Klettern">Klettern</option>
-                                        <option value="Kurse">Kurse</option>
+                                    <select name="kategorie" defaultValue={getKat(editingTour, tourKategorien)} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
+                                        {tourKategorien.length === 0 && <option value="Hochtour">Hochtour</option>}
+                                        {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -1187,7 +1353,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 if (tourStatusFilter === 'Beispieltouren' && !isExample) return false;
                                 if (tourStatusFilter === 'Öffentlich' && (!isVisible || isExample)) return false;
                                 if (tourStatusFilter === 'Versteckt' && isVisible) return false;
-                                if (tourKatFilter !== 'Alle' && getKat(t) !== tourKatFilter) return false;
+                                if (tourKatFilter !== 'Alle' && getKat(t, tourKategorien) !== tourKatFilter) return false;
                                 
                                 return true;
                             }).map(t => (
@@ -1195,7 +1361,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                     <div>
                                         <p className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center flex-wrap gap-2">
                                             {t.title} 
-                                            <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 text-[8px] rounded-sm">{getKat(t)}</span>
+                                            <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 text-[8px] rounded-sm">{getKat(t, tourKategorien)}</span>
                                             {t.isExample === true && <span className="text-blue-500 bg-blue-50 px-2 py-0.5 text-[8px]">[BEISPIELTOUR]</span>}
                                             {t.visible === false && <span className="text-red-500 bg-red-50 px-2 py-0.5 text-[8px]">[VERSTECKT]</span>}
                                             {t.interneNotizen && <span className="text-amber-600 bg-amber-50 px-2 py-0.5 text-[8px] flex items-center gap-1"><Lock size={10}/> NOTIZ</span>}
@@ -1214,7 +1380,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 if (tourStatusFilter === 'Beispieltouren' && !isExample) return false;
                                 if (tourStatusFilter === 'Öffentlich' && (!isVisible || isExample)) return false;
                                 if (tourStatusFilter === 'Versteckt' && isVisible) return false;
-                                if (tourKatFilter !== 'Alle' && getKat(t) !== tourKatFilter) return false;
+                                if (tourKatFilter !== 'Alle' && getKat(t, tourKategorien) !== tourKatFilter) return false;
                                 return true;
                             }).length === 0 && (
                                 <div className="text-center p-12 border border-dashed border-zinc-200 text-zinc-400">
@@ -1525,6 +1691,178 @@ export default function AdminArea({ user, touren, onLogout }) {
                 <form onSubmit={e => { e.preventDefault(); const v=e.target.k.value.trim(); if(v && !protocolKategorien.includes(v)) { setDoc(doc(db, 'settings', 'protokolle'), { kategorien: [...protocolKategorien, v] }, { merge: true }); e.target.k.value=''; } }} className="flex gap-2">
                     <input name="k" placeholder="Neue Kategorie..." className="flex-1 border border-zinc-300 p-3 text-sm outline-none focus:border-black transition w-full"/>
                     <button className="bg-black text-white px-4 md:px-6 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition">Erstellen</button>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* --- BEARBEITUNGS MODALS --- */}
+      {editingTask && (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+            <div className="bg-white p-5 md:p-10 w-full max-w-3xl max-h-[95vh] overflow-y-auto shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-200 pb-6">
+                    <h3 className="serif text-2xl md:text-3xl italic">{editingTask.id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}</h3>
+                    <button onClick={() => setEditingTask(null)} className="text-zinc-400 hover:text-black transition-colors bg-zinc-100 p-2 rounded-full"><X size={20}/></button>
+                </div>
+                <form onSubmit={(e) => { e.preventDefault(); saveTask(editingTask, e.target.file.files[0]); }} className="space-y-8">
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel der Aufgabe</label>
+                        <input required value={editingTask.title} onChange={e => setEditingTask({...editingTask, title: e.target.value})} placeholder="Kurzer, prägnanter Titel" className="w-full border-b-2 border-zinc-200 p-3 outline-none mt-2 text-lg md:text-xl focus:border-black transition" />
+                    </div>
+                    
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Beschreibung & Details</label>
+                        <textarea value={editingTask.description || ''} onChange={e => setEditingTask({...editingTask, description: e.target.value})} placeholder="Was genau muss gemacht werden?" rows="6" className="w-full border border-zinc-300 p-4 md:p-5 text-base mt-3 resize-y bg-zinc-50 focus:bg-white transition-colors outline-none focus:border-black" />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 pt-6 border-t border-zinc-100">
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Status</label>
+                            <select value={editingTask.status} onChange={e => setEditingTask({...editingTask, status: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer">{KANBAN_COLUMNS.map(c => <option key={c}>{c}</option>)}</select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Label / Kategorie</label>
+                            <select value={editingTask.category} onChange={e => setEditingTask({...editingTask, category: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer">
+                                {taskKategorien.length === 0 && <option value="">- Leer -</option>}
+                                {taskKategorien.map(c => <option key={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Zuständig</label>
+                            <select value={editingTask.assignee || ''} onChange={e => setEditingTask({...editingTask, assignee: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer"><option value="">-- Frei --</option>{teamMemberNames.map(a => <option key={a}>{a}</option>)}</select>
+                        </div>
+                    </div>
+                    
+                    <div className="pt-6 border-t border-zinc-100">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Dateianhang</label>
+                        <div className="mt-3 border border-zinc-300 p-4 md:p-6 bg-zinc-50 flex flex-col md:flex-row items-center justify-between gap-4">
+                            <input type="file" name="file" className="text-sm cursor-pointer w-full md:w-auto" />
+                            {editingTask.fileUrl && <a href={editingTask.fileUrl} target="_blank" rel="noreferrer" className="w-full md:w-auto text-[10px] uppercase font-bold text-blue-600 hover:text-blue-800 hover:underline flex justify-center items-center gap-2 bg-white px-4 py-2 border border-zinc-200"><ExternalLink size={14}/> Bisherige Datei öffnen</a>}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col-reverse md:flex-row justify-between items-center pt-8 border-t border-zinc-200 gap-4">
+                        {editingTask.id ? <button type="button" onClick={() => { if(confirm('Aufgabe sicher löschen?')) { deleteDoc(doc(db,'tasks',editingTask.id)); logAction(`Aufgabe gelöscht: ${editingTask.title}`); setEditingTask(null); } }} className="w-full md:w-auto justify-center text-red-500 font-bold text-[10px] uppercase tracking-widest hover:text-red-700 hover:bg-red-50 px-4 py-3 transition flex items-center gap-2"><Trash2 size={16}/> Aufgabe löschen</button> : <div/>} 
+                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                            <button type="button" onClick={() => setEditingTask(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
+                            <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading ? 'Speichert...' : 'Aufgabe speichern'}</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {editingDoc && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+            <div className="bg-white p-5 md:p-10 w-full max-w-2xl shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">{editingDoc.id ? 'Dokument bearbeiten' : 'Dokument(e) Upload'}</h3><button onClick={() => setEditingDoc(null)} className="hover:text-red-500 transition p-2"><X/></button></div>
+                <form onSubmit={saveDoc} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Ordner (Hauptkategorie)</label>
+                            <select name="category" value={editingDoc.category} onChange={e => setEditingDoc({...editingDoc, category: e.target.value, subcategory: ''})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-2 bg-white cursor-pointer outline-none focus:border-black transition">
+                                {docKategorien.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Unterkategorie (optional)</label>
+                            <select name="subcategory" value={editingDoc.subcategory || ''} onChange={e => setEditingDoc({...editingDoc, subcategory: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-2 bg-white cursor-pointer outline-none focus:border-black transition">
+                                <option value="">-- Keine --</option>
+                                {(docSubkategorien[editingDoc.category] || []).map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    {!editingDoc.id ? (
+                        <>
+                            <div className="pt-4 border-t border-zinc-100">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex gap-4 items-center mb-4"><span className="flex items-center gap-2"><input type="radio" checked={!editingDoc.isLink} onChange={() => setEditingDoc({...editingDoc, isLink: false})} className="w-4 h-4 accent-black cursor-pointer"/> Dateiupload (Drag & Drop)</span><span className="flex items-center gap-2"><input type="radio" checked={editingDoc.isLink} onChange={() => setEditingDoc({...editingDoc, isLink: true})} className="w-4 h-4 accent-black cursor-pointer"/> Web-Link</span></label>
+                                
+                                {editingDoc.isLink ? (
+                                    <div className="space-y-4">
+                                        <input name="name" required placeholder="Name des Links" className="w-full border border-zinc-300 p-4 text-sm outline-none focus:border-black transition" />
+                                        <input name="url" type="url" required placeholder="https://..." className="w-full border border-zinc-300 p-4 text-sm outline-none focus:border-black transition" />
+                                    </div>
+                                ) : (
+                                    <div 
+                                        onDragOver={e => { e.preventDefault(); setDragActive(true); }}
+                                        onDragLeave={() => setDragActive(false)}
+                                        onDrop={e => { e.preventDefault(); setDragActive(false); setUploadFiles(Array.from(e.dataTransfer.files)); }}
+                                        className={`border-2 border-dashed p-6 md:p-10 text-center transition-colors ${dragActive ? 'border-black bg-zinc-100' : 'border-zinc-300 bg-zinc-50 hover:bg-zinc-100'}`}
+                                    >
+                                        <div className="flex flex-col items-center justify-center space-y-4 cursor-pointer relative">
+                                            <UploadCloud size={32} className="text-zinc-400" />
+                                            {uploadFiles.length > 0 ? (
+                                                <p className="text-sm font-bold text-black">{uploadFiles.length} Datei(en) ausgewählt:<br/><span className="text-xs font-normal text-zinc-500 mt-2 block break-all">{uploadFiles.map(f=>f.name).join(', ')}</span></p>
+                                            ) : (
+                                                <p className="text-xs text-zinc-500 uppercase tracking-widest leading-relaxed">Dateien hierhin ziehen oder<br className="md:hidden"/> auf das Feld tippen</p>
+                                            )}
+                                            <input type="file" multiple onChange={e => setUploadFiles(Array.from(e.target.files))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="pt-4 border-t border-zinc-100 space-y-4">
+                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Dateiname / Titel</label><input name="name" required value={editingDoc.name} onChange={e => setEditingDoc({...editingDoc, name: e.target.value})} className="w-full border-b border-zinc-300 p-3 outline-none mt-1 focus:border-black transition text-lg" /></div>
+                            {editingDoc.isLink && <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Web-Link URL</label><input name="url" type="url" required value={editingDoc.url} onChange={e => setEditingDoc({...editingDoc, url: e.target.value})} className="w-full border border-zinc-300 p-4 mt-2 text-sm outline-none focus:border-black transition" /></div>}
+                        </div>
+                    )}
+
+                    <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 gap-4">
+                        {editingDoc.id ? <button type="button" onClick={() => { if(confirm('Wirklich löschen?')) { deleteDoc(doc(db,'docs',editingDoc.id)); logAction(`Dokument gelöscht: ${editingDoc.name}`); setEditingDoc(null); } }} className="text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline text-center w-full md:w-auto py-2">Löschen</button> : <div/>} 
+                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                            <button type="button" onClick={() => { setEditingDoc(null); setUploadFiles([]); }} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
+                            <button type="submit" disabled={isUploading || (!editingDoc.id && !editingDoc.isLink && uploadFiles.length === 0)} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl disabled:bg-zinc-300 text-center">{isUploading?'Lädt...':'Speichern'}</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+      
+      {editingProtocol && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+            <div className="bg-white p-5 md:p-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl md:text-3xl italic">{editingProtocol.id?'Eintrag bearbeiten':'Neuer Eintrag'}</h3><button onClick={() => setEditingProtocol(null)} className="hover:text-red-500 transition p-2"><X/></button></div>
+                <form onSubmit={(e) => { e.preventDefault(); saveProtocol(editingProtocol, e.target.file?.files[0]); }} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel / Thema</label><input required value={editingProtocol.title} onChange={e => setEditingProtocol({...editingProtocol, title: e.target.value})} className="w-full border-b border-zinc-300 p-3 mt-1 outline-none text-xl focus:border-black transition" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Datum</label><input type="date" value={editingProtocol.date} onChange={e => setEditingProtocol({...editingProtocol, date: e.target.value})} className="w-full border-b border-zinc-300 p-3 mt-1 outline-none text-lg focus:border-black transition" /></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kategorie</label><select value={editingProtocol.category} onChange={e => setEditingProtocol({...editingProtocol, category: e.target.value})} className="w-full border border-zinc-300 p-4 mt-2 outline-none text-xs uppercase tracking-widest bg-white cursor-pointer focus:border-black transition">{protocolKategorien.map(c => <option key={c}>{c}</option>)}</select></div>
+                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Teilnehmer</label><input value={editingProtocol.participants || ''} onChange={e => setEditingProtocol({...editingProtocol, participants: e.target.value})} placeholder="Adrian, Jens..." className="w-full border border-zinc-300 p-4 mt-2 outline-none text-sm focus:border-black transition" /></div>
+                    </div>
+                    
+                    <div className="pt-4"><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Diskutierte Notizen / Details</label><textarea value={editingProtocol.notes || ''} onChange={e => setEditingProtocol({...editingProtocol, notes: e.target.value})} rows="6" className="w-full border border-zinc-300 p-4 md:p-5 mt-2 outline-none text-sm bg-zinc-50 focus:bg-white resize-y focus:border-black transition" /></div>
+                    
+                    <div className="pt-6 border-t border-zinc-200">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block mb-4">Beschlüsse & To-Dos aus dem Meeting</label>
+                        <div className="space-y-3">
+                            {editingProtocol.decisions.map((d, i) => (
+                                <div key={i} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-zinc-50 p-4 border border-zinc-200">
+                                    <div className="w-full sm:flex-1"><label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Beschluss / To-Do</label><input value={d.text} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].text = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} placeholder="Was wird gemacht?" className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition" /></div>
+                                    <div className="w-full sm:w-48 flex gap-2 items-end">
+                                        <div className="flex-1">
+                                            <label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Wer machts?</label>
+                                            <select value={d.assignee || ''} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].assignee = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition bg-white"><option value="">Zuständig...</option>{teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                                        </div>
+                                        <button type="button" onClick={() => { const nd = [...editingProtocol.decisions]; nd.splice(i,1); setEditingProtocol({...editingProtocol, decisions: nd}); }} className="text-zinc-400 hover:text-red-500 p-3 transition bg-white border border-zinc-300 sm:border-0 sm:bg-transparent flex-shrink-0"><Trash2 size={18}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <button type="button" onClick={() => setEditingProtocol({...editingProtocol, decisions: [...editingProtocol.decisions, {text: '', assignee: ''}]})} className="mt-4 bg-zinc-100 text-black px-6 py-3 text-[9px] uppercase tracking-widest font-bold hover:bg-zinc-200 transition w-full sm:w-auto">+ Neuen Beschluss hinzufügen</button>
+                    </div>
+
+                    <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 mt-8 gap-4">
+                        {editingProtocol.id ? <button type="button" onClick={() => { if(confirm('Eintrag komplett löschen?')) { deleteDoc(doc(db,'protocols',editingProtocol.id)); logAction(`Protokoll gelöscht: ${editingProtocol.title}`); setEditingProtocol(null); } }} className="w-full md:w-auto justify-center text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline flex items-center gap-2 py-2"><Trash2 size={14}/> Löschen</button> : <div/>} 
+                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                            <button type="button" onClick={() => setEditingProtocol(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
+                            <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading?'Speichert...':'Speichern'}</button>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { FileText, Tag, Filter, Search, Info, Hand } from 'lucide-react';
 
@@ -16,7 +16,7 @@ const firebaseConfig = {
     measurementId: "G-J0YRE7EC1D"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 
 const loadEmailJS = () => new Promise((resolve, reject) => {
@@ -35,21 +35,22 @@ const Instagram = (props) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
 );
 
-const ANGEBOT_SOMMER = [
-    { id: "s1", title: "Hochtouren", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", image: "/hochtour.jpg", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen." },
-    { id: "s2", title: "Alpinklettern", desc: "In den besten Granit- und Kalkwänden der Schweiz.", image: "/alpinklettern.jpg", longDesc: "Mehrseillängen-Träume in bestem Fels. Von der Furka bis ins Bergell – wir finden die perfekte Linie für dein Level." },
-    { id: "s3", title: "Kletterkurse", desc: "Vom ersten Griff in der Halle bis zum Vorstieg im Fels.", image: "/kletterkurs.jpg", longDesc: "Sicherheit steht an erster Stelle. Wir vermitteln dir das nötige Know-how in Seiltechnik, Standplatzbau und Vorstiegstaktik." },
-    { id: "s4", title: "Gratüberschreitungen", desc: "Luftige Grate und endlose Aussichten.", image: "/grat.jpg", longDesc: "Die eleganteste Art, einen Gipfel zu besteigen. Klassiker wie der Eiger- oder Biancograt warten auf dich." }
+const DEFAULT_ANGEBOTE = [
+    { id: "mock-s1", title: "Hochtouren", season: "Sommer", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen.", image: "/hochtour.jpg" },
+    { id: "mock-s2", title: "Alpinklettern", season: "Sommer", desc: "In den besten Granit- und Kalkwänden der Schweiz.", longDesc: "Mehrseillängen-Träume in bestem Fels. Von der Furka bis ins Bergell – wir finden die perfekte Linie für dein Level.", image: "/alpinklettern.jpg" },
+    { id: "mock-s3", title: "Kletterkurse", season: "Sommer", desc: "Vom ersten Griff in der Halle bis zum Vorstieg im Fels.", longDesc: "Sicherheit steht an erster Stelle. Wir vermitteln dir das nötige Know-how in Seiltechnik, Standplatzbau und Vorstiegstaktik.", image: "/kletterkurs.jpg" },
+    { id: "mock-s4", title: "Gratüberschreitungen", season: "Sommer", desc: "Luftige Grate und endlose Aussichten.", longDesc: "Die eleganteste Art, einen Gipfel zu besteigen. Klassiker wie der Eiger- oder Biancograt warten auf dich.", image: "/grat.jpg" },
+    { id: "mock-w1", title: "Skitouren", season: "Winter", desc: "Unberührter Pulverschnee und einsame Gipfelerlebnisse.", longDesc: "Vom Berner Oberland bis ins Wallis – wir finden für dich den besten Powder und unverspurte Hänge fernab der Massen.", image: "/skitour.jpg" },
+    { id: "mock-w2", title: "Eisklettern", season: "Winter", desc: "Die faszinierende Welt der gefrorenen Wasserfälle.", longDesc: "Steile Eiszapfen und blaues Eis. Wir zeigen dir die richtige Schlagtechnik und den Standplatzbau.", image: "/eisklettern.jpg" },
+    { id: "mock-w3", title: "Freeriden", season: "Winter", desc: "Die besten Lines in den Alpen mit Fokus auf Sicherheit.", longDesc: "Maximale Abfahrt bei minimalem Aufstieg. Wir nutzen die Bergbahnen und zeigen dir die versteckten Runs.", image: "/freeride.jpg" },
+    { id: "mock-w4", title: "Lawinenkurse", season: "Winter", desc: "Fundiertes Wissen für deine Sicherheit im Backcountry.", longDesc: "Prävention, Beobachtung und Rettung. Ein essenzieller Kurs für alle, die sich im Winter abseits der Pisten bewegen.", image: "/lawine.jpg" }
 ];
 
-const ANGEBOT_WINTER = [
-    { id: "w1", title: "Skitouren", desc: "Unberührter Pulverschnee und einsame Gipfelerlebnisse.", image: "/skitour.jpg", longDesc: "Vom Berner Oberland bis ins Wallis – wir finden für dich den besten Powder und unverspurte Hänge fernab der Massen." },
-    { id: "w2", title: "Eisklettern", desc: "Die faszinierende Welt der gefrorenen Wasserfälle.", image: "/eisklettern.jpg", longDesc: "Steile Eiszapfen und blaues Eis. Wir zeigen dir die richtige Schlagtechnik und den Standplatzbau." },
-    { id: "w3", title: "Freeriden", desc: "Die besten Lines in den Alpen mit Fokus auf Sicherheit.", image: "/freeride.jpg", longDesc: "Maximale Abfahrt bei minimalem Aufstieg. Wir nutzen die Bergbahnen und zeigen dir die versteckten Runs." },
-    { id: "w4", title: "Lawinenkurse", desc: "Fundiertes Wissen für deine Sicherheit im Backcountry.", image: "/lawine.jpg", longDesc: "Prävention, Beobachtung und Rettung. Ein essenzieller Kurs für alle, die sich im Winter abseits der Pisten bewegen." }
-];
-
-const getKat = (t) => t.kategorie || (t.title.toLowerCase().includes('kurs') ? 'Kurse' : t.title.toLowerCase().includes('ski') ? 'Skitour' : t.title.toLowerCase().includes('klett') ? 'Klettern' : 'Hochtour');
+const getKat = (t, defaultCats) => {
+    if (!t) return defaultCats[0] || 'Hochtour';
+    if (t.kategorie) return t.kategorie;
+    return defaultCats[0] || 'Hochtour';
+};
 const getTech = (t) => t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t.ausdauer ? Number(t.ausdauer) : 2;
 
@@ -95,7 +96,7 @@ const Accordion = ({ title, content, children }) => {
 export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
-    const [angebotTab, setAngebotTab] = useState('sommer');
+    const [angebotTab, setAngebotTab] = useState('Sommer');
     const [selectedAngebot, setSelectedAngebot] = useState(null);
     const [selectedTour, setSelectedTour] = useState(null);
     const [selectedTeamMember, setSelectedTeamMember] = useState(null);
@@ -107,6 +108,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     
     const [teamProfiles, setTeamProfiles] = useState([]);
     const [teamAttributes, setTeamAttributes] = useState([]);
+    const [angebote, setAngebote] = useState([]);
     
     const [isAllToursModalOpen, setIsAllToursModalOpen] = useState(false);
     const [isIdeenBoardOpen, setIsIdeenBoardOpen] = useState(false);
@@ -122,18 +124,24 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const exampleTours = touren.filter(t => t.isExample === true);
     const recentTours = visibleTours.slice(0, 3);
 
+    const activeAngebote = angebote.length > 0 ? angebote : DEFAULT_ANGEBOTE;
+    const sommerAngebote = activeAngebote.filter(a => a.season === 'Sommer');
+    const winterAngebote = activeAngebote.filter(a => a.season === 'Winter');
+    const tourKategorien = [...new Set(activeAngebote.map(a => a.title))];
+
+    // Entfernt den Dummy-Fallback für TeamProfiles komplett! Startet ggf. leer.
     const visibleTeamProfiles = teamProfiles.filter(t => t.visible !== false);
     const activeTeamAttributes = teamAttributes.length > 0 ? teamAttributes : ['Superkraft', 'Kryptonit', 'Touren-Snack', 'Lebensmotto'];
 
     const filteredTours = visibleTours.filter(t => {
-        if (filterKategorie !== 'Alle' && getKat(t) !== filterKategorie) return false;
+        if (filterKategorie !== 'Alle' && getKat(t, tourKategorien) !== filterKategorie) return false;
         if (filterTechnik !== 'Alle' && getTech(t) !== parseInt(filterTechnik)) return false;
         if (filterAusdauer !== 'Alle' && getAusd(t) !== parseInt(filterAusdauer)) return false;
         return true;
     });
     
     const filteredExampleTours = exampleTours.filter(t => {
-        if (filterKategorie !== 'Alle' && getKat(t) !== filterKategorie) return false;
+        if (filterKategorie !== 'Alle' && getKat(t, tourKategorien) !== filterKategorie) return false;
         return true;
     });
 
@@ -144,13 +152,18 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     }, []);
     
     useEffect(() => {
-        const unsub1 = onSnapshot(collection(db, 'team_profiles'), snap => {
-            setTeamProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        const unsub2 = onSnapshot(doc(db, 'settings', 'team_attributes'), snap => {
-            if (snap.exists() && snap.data().labels) setTeamAttributes(snap.data().labels);
-        });
-        return () => { unsub1(); unsub2(); };
+        const logError = (err) => console.error("Fehler beim Laden aus Firebase. Firestore Rules checken?", err);
+        
+        const unsub1 = onSnapshot(collection(db, 'team_profiles'), 
+            snap => setTeamProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() }))), logError
+        );
+        const unsub2 = onSnapshot(doc(db, 'settings', 'team_attributes'), 
+            snap => { if (snap.exists() && snap.data().labels) setTeamAttributes(snap.data().labels); }, logError
+        );
+        const unsub3 = onSnapshot(collection(db, 'angebote'), 
+            snap => setAngebote(snap.docs.map(d => ({ id: d.id, ...d.data() }))), logError
+        );
+        return () => { unsub1(); unsub2(); unsub3(); };
     }, []);
 
     useEffect(() => {
@@ -180,12 +193,12 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         }, 100);
 
         return () => observer.disconnect();
-    }, [touren, teamProfiles, angebotTab, isAllToursModalOpen, isIdeenBoardOpen]);
+    }, [touren, teamProfiles, angebote, angebotTab, isAllToursModalOpen, isIdeenBoardOpen]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (isLightboxOpen === null || (!selectedTour && !selectedTeamMember)) return;
-            const activeItem = selectedTour || selectedTeamMember;
+            if (isLightboxOpen === null || (!selectedTour && !selectedTeamMember && !selectedAngebot)) return;
+            const activeItem = selectedTour || selectedTeamMember || selectedAngebot;
             const imgs = activeItem.images || (activeItem.image ? [activeItem.image] : []);
             if (imgs.length <= 1) return;
             if (e.key === 'ArrowRight') setIsLightboxOpen((prev) => (prev + 1) % imgs.length);
@@ -194,7 +207,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isLightboxOpen, selectedTour, selectedTeamMember]);
+    }, [isLightboxOpen, selectedTour, selectedTeamMember, selectedAngebot]);
 
     useEffect(() => {
         if (isLightboxOpen !== null && window.innerWidth < 768) {
@@ -244,10 +257,12 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         try {
             await addDoc(collection(db, 'anfragen'), data);
             const emailjs = await loadEmailJS();
+            
             await emailjs.send(
                 "service_b02rsz7", "template_ewn7qhm", 
                 { vorname: data.vorname, name: data.name, email: data.email, thema: data.thema, nachricht: data.nachricht }
             );
+            
             setBookingStatus("Anfrage erfolgreich gesendet! Wir melden uns bald bei dir.");
             setTimeout(() => { setSelectedTour(null); setIsInquiryMode(false); setBookingStatus(null); setIsSubmitting(false); }, 4000);
         } catch (err) { 
@@ -376,13 +391,13 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         <div className="text-center mb-20">
                             <h2 className="serif text-4xl italic mb-6">Unser Angebot</h2>
                             <div className="flex justify-center space-x-12 text-sm md:text-base font-semibold uppercase tracking-widest">
-                                <button onClick={() => setAngebotTab('sommer')} className={`pb-2 opacity-40 transition-all ${angebotTab === 'sommer' ? 'border-b-2 border-black opacity-100' : ''}`}>Sommer</button>
-                                <button onClick={() => setAngebotTab('winter')} className={`pb-2 opacity-40 transition-all ${angebotTab === 'winter' ? 'border-b-2 border-black opacity-100' : ''}`}>Winter</button>
+                                <button onClick={() => setAngebotTab('Sommer')} className={`pb-2 opacity-40 transition-all ${angebotTab === 'Sommer' ? 'border-b-2 border-black opacity-100' : ''}`}>Sommer</button>
+                                <button onClick={() => setAngebotTab('Winter')} className={`pb-2 opacity-40 transition-all ${angebotTab === 'Winter' ? 'border-b-2 border-black opacity-100' : ''}`}>Winter</button>
                             </div>
                         </div>
                         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-                        {(angebotTab === 'sommer' ? ANGEBOT_SOMMER : ANGEBOT_WINTER).map((item, i) => (
-                            <div key={i} onClick={() => setSelectedAngebot(item)} className="p-8 border border-zinc-100 bg-[#fdfdfc] cursor-pointer hover:border-black transition-all group flex flex-col justify-between min-h-[250px]">
+                        {(angebotTab === 'Sommer' ? sommerAngebote : winterAngebote).map((item, i) => (
+                            <div key={item.id || i} onClick={() => setSelectedAngebot(item)} className="p-8 border border-zinc-100 bg-[#fdfdfc] cursor-pointer hover:border-black transition-all group flex flex-col justify-between min-h-[250px]">
                                 <div>
                                     <h3 className="serif text-xl italic mb-4 group-hover:translate-x-1 transition-transform">{item.title}</h3>
                                     <p className="text-zinc-500 text-xs leading-relaxed font-light">{item.desc}</p>
@@ -510,10 +525,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                         <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
                                         <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
                                             <option value="Alle">Alle Kategorien</option>
-                                            <option value="Kurse">Kurse</option>
-                                            <option value="Klettern">Klettern</option>
-                                            <option value="Skitour">Skitour</option>
-                                            <option value="Hochtour">Hochtour</option>
+                                            {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
                                         </select>
                                     </div>
                                     <div className="flex items-center gap-3">
@@ -581,7 +593,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 {tour.maxPlaetze - tour.angemeldet > 0 ? `${tour.maxPlaetze - tour.angemeldet} Plätze` : 'Voll'}
                                             </div>
                                             <div className="absolute top-4 left-4 bg-black text-white px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
-                                                {getKat(tour)}
+                                                {getKat(tour, tourKategorien)}
                                             </div>
                                         </div>
                                         <div>
@@ -622,7 +634,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
                         <div className="max-w-7xl mx-auto flex flex-wrap gap-4 items-center">
                             <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mr-4">Filter:</span>
-                            {['Alle', 'Hochtour', 'Skitour', 'Klettern', 'Kurse'].map(kat => (
+                            {['Alle', ...tourKategorien].map(kat => (
                                 <button key={kat} onClick={() => setFilterKategorie(kat)} className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors font-bold ${filterKategorie === kat ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}>
                                     {kat}
                                 </button>
@@ -638,7 +650,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                         <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
                                             <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
                                             <div className="absolute top-4 left-4 bg-black text-white px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
-                                                {getKat(tour)}
+                                                {getKat(tour, tourKategorien)}
                                             </div>
                                         </div>
                                         <div>
@@ -672,8 +684,21 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
                         
                         <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
-                            <img src={selectedAngebot.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
                             
+                            <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth" onScroll={() => setHasScrolledGallery(true)}>
+                                {(selectedAngebot.images || (selectedAngebot.image ? [selectedAngebot.image] : [])).map((img, idx) => (
+                                    <div key={idx} onClick={() => setIsLightboxOpen(idx)} className="relative w-full h-full flex-shrink-0 snap-start cursor-pointer">
+                                        <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="hidden md:flex absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none items-center justify-center">
+                                <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
+                                    <Search size={14}/> Bilder ansehen
+                                </span>
+                            </div>
+
                             <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end pointer-events-none">
                                 <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)]"></div>
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
@@ -797,16 +822,16 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                             {/* Main Detail Image Slider (100% breite, kein Wisch-Hinweis) */}
                             <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth">
                                 {(selectedTour.images || [selectedTour.image]).map((img, idx) => (
-                                    <div 
-                                        key={idx} 
+                                    <div
+                                        key={idx}
                                         onClick={() => setIsLightboxOpen(idx)}
-                                        className="relative w-full h-full flex-shrink-0 snap-start cursor-pointer" 
+                                        className="relative w-full h-full flex-shrink-0 snap-start cursor-pointer"
                                     >
                                         <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
                                     </div>
                                 ))}
                             </div>
-                            
+
                             {/* Hover Overlay Desktop */}
                             <div className="hidden md:flex absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none items-center justify-center">
                                 <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
@@ -819,7 +844,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
                                 <div className="relative z-[30] p-6 md:p-10">
                                     <div className="flex gap-3 items-center mb-3">
-                                        <span className="bg-white text-black px-2 py-1 text-[8px] uppercase tracking-widest font-bold">{getKat(selectedTour)}</span>
+                                        <span className="bg-white text-black px-2 py-1 text-[8px] uppercase tracking-widest font-bold">{getKat(selectedTour, tourKategorien)}</span>
                                         {selectedTour.isExample && <span className="bg-blue-500 text-white px-2 py-1 text-[8px] uppercase tracking-widest font-bold">Idee</span>}
                                     </div>
                                     <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedTour.title}</h2>
@@ -827,20 +852,20 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                             </div>
                             <button onClick={(e) => { e.stopPropagation(); setSelectedTour(null); setIsInquiryMode(false); }} className="md:hidden fixed top-4 right-4 text-white text-3xl z-[60] bg-black/40 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
                         </div>
-                        
+
                         <div className="w-full md:w-1/2 h-auto md:h-full md:overflow-y-auto bg-white relative z-10 flex flex-col">
                             <button onClick={() => { setSelectedTour(null); setIsInquiryMode(false); }} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
-                            
+
                             <div className="p-6 md:p-10 lg:p-16 flex-1 flex flex-col">
                                 {!isBookingMode && !isInquiryMode ? (
                                     <div className="fade-in space-y-12 flex-1 flex flex-col">
-                                        
+
                                         <div className="space-y-8 flex-1">
                                             <div>
                                                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Beschreibung</h3>
                                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
                                             </div>
-                                            
+
                                             <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
                                                 {(!selectedTour.isExample || selectedTour.date) && (
                                                     <Accordion title="Datum & Durchführung">
@@ -849,12 +874,12 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                             {selectedTour.guide && (
                                                                 <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center gap-2">
                                                                     <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Voraussichtliche Leitung:</span>
-                                                                    <button 
+                                                                    <button
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             const guideProfile = teamProfiles.find(p => p.name === selectedTour.guide);
                                                                             if (guideProfile) setSelectedTeamMember(guideProfile);
-                                                                        }} 
+                                                                        }}
                                                                         className="font-bold underline hover:text-black text-zinc-600 transition-colors text-xs"
                                                                     >
                                                                         {selectedTour.guide}
@@ -866,7 +891,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 )}
 
                                                 {!selectedTour.isExample && <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />}
-                                                
+
                                                 <Accordion title="Anforderungen & Level">
                                                     <div className="pb-4 space-y-6">
                                                         <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
@@ -897,7 +922,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                     </div>
                                                 </Accordion>
                                             </div>
-                                            
+
                                             {!selectedTour.isExample && (
                                                 <div className="grid md:grid-cols-2 gap-6 pt-4">
                                                     <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
@@ -921,7 +946,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 </div>
                                             )}
                                         </div>
-                                        
+
                                         {selectedTour.isExample ? (
                                             <button onClick={() => setIsInquiryMode(true)} className="mt-8 w-full py-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all bg-black text-white hover:bg-zinc-800 shadow-xl">
                                                 Interesse wecken / Unverbindlich anfragen
@@ -1004,16 +1029,16 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
 
-            {/* Vollbild Lightbox mit Touch/Swipe (Kombiniert für Touren & Team) */}
-            {isLightboxOpen !== null && (selectedTour || selectedTeamMember) && (() => {
-                const activeItem = selectedTour || selectedTeamMember;
+            {/* Vollbild Lightbox mit Touch/Swipe (Kombiniert für Touren, Team & Angebote) */}
+            {isLightboxOpen !== null && (selectedTour || selectedTeamMember || selectedAngebot) && (() => {
+                const activeItem = selectedTour || selectedTeamMember || selectedAngebot;
                 const imgs = activeItem.images || (activeItem.image ? [activeItem.image] : []);
-                
+
                 return (
                 <div className="fixed inset-0 z-[400] bg-black flex items-center justify-center fade-in">
                     <div className="absolute inset-0" onClick={() => setIsLightboxOpen(null)}></div>
                     <button onClick={() => setIsLightboxOpen(null)} className="absolute top-4 right-4 md:top-8 md:right-8 text-white text-4xl md:text-5xl z-[450] w-12 h-12 flex items-center justify-center bg-black/40 rounded-full md:bg-transparent md:w-auto md:h-auto">&times;</button>
-                    
+
                     {/* --- MOBILE GALLERY (Native Scroll) --- */}
                     <div className="md:hidden absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar items-center z-[410]" onScroll={() => setHasScrolledGallery(true)}>
                         {(!hasScrolledGallery && imgs.length > 1) && (
@@ -1039,20 +1064,20 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         );
                         return (
                             <div className="hidden md:flex absolute inset-0 items-center justify-center z-[410]">
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }} 
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }}
                                     className="absolute left-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[420]"
                                 >&#8249;</button>
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }} 
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }}
                                     className="absolute right-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[420]"
                                 >&#8250;</button>
-                                <img 
-                                    src={imgs[isLightboxOpen]} 
-                                    loading="lazy" 
-                                    decoding="async" 
-                                    className="max-w-full max-h-[90vh] object-contain shadow-2xl transition-all duration-500 pointer-events-none px-24" 
-                                    alt="" 
+                                <img
+                                    src={imgs[isLightboxOpen]}
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="max-w-full max-h-[90vh] object-contain shadow-2xl transition-all duration-500 pointer-events-none px-24"
+                                    alt=""
                                 />
                             </div>
                         );
