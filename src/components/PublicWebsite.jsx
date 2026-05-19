@@ -86,7 +86,8 @@ const Accordion = ({ title, content, children }) => {
                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-zinc-400 group-hover:text-black transition-colors">{title}</h3>
                 <span className="text-xl font-light text-zinc-400 group-hover:text-black transition-colors">{isOpen ? '−' : '+'}</span>
             </button>
-            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[1000px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+            {/* Erhöhte max-h für sehr lange Texte wie Programm & Ablauf */}
+            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[5000px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
                 {children ? children : <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line pb-4">{content}</p>}
             </div>
         </div>
@@ -481,7 +482,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                         <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] group-hover:text-zinc-500 transition-colors">{member.name}</h3>
                                         <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-medium">{member.title}</p>
                                         <div className="h-px w-8 bg-zinc-200 mx-auto my-6"></div>
-                                        <p className="text-zinc-500 text-[10px] leading-loose font-light tracking-wide uppercase line-clamp-3">{member.desc}</p>
                                         <div className="pt-4 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <span className="text-[8px] uppercase tracking-widest text-zinc-400 border-b border-zinc-200 pb-1">Steckbrief ansehen</span>
                                         </div>

@@ -1721,10 +1721,13 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Beschreibung (Haupttext)</label>
                                 <textarea name="description" defaultValue={editingTour.description} required className="w-full border border-zinc-300 p-5 text-base h-48 resize-y mt-2 outline-none focus:border-black transition" />
                             </div>
-                            <div className="grid md:grid-cols-3 gap-8 pt-4 border-t border-zinc-200">
+                            <div className="pt-4 border-t border-zinc-200">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Programm & Ablauf</label>
+                                <textarea name="ablauf" defaultValue={editingTour.ablauf} className="w-full border border-zinc-300 p-5 text-base h-48 resize-y mt-2 outline-none focus:border-black transition" />
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-8 pt-4 border-t border-zinc-200">
                                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Leistungen</label><textarea name="leistungen" defaultValue={editingTour.leistungen} className="w-full border border-zinc-300 p-4 text-sm h-64 resize-y mt-2 outline-none focus:border-black transition" /></div>
                                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Anforderungen</label><textarea name="anforderungen" defaultValue={editingTour.anforderungen} className="w-full border border-zinc-300 p-4 text-sm h-64 resize-y mt-2 outline-none focus:border-black transition" /></div>
-                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Programm & Ablauf</label><textarea name="ablauf" defaultValue={editingTour.ablauf} className="w-full border border-zinc-300 p-4 text-sm h-64 resize-y mt-2 outline-none focus:border-black transition" /></div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Spezifisches Material (Ergänzend zum PDF)</label>
