@@ -7,7 +7,8 @@ import { getStorage } from "firebase/storage";
 import { 
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
   LayoutDashboard, User, Users, X, Edit, ExternalLink, Trash2, MapPin, 
-  FileText, Share2, Link as LinkIcon, UploadCloud, Lock, Layers, Monitor, RotateCcw, Archive
+  FileText, Share2, Link as LinkIcon, UploadCloud, Lock, Layers, Monitor, RotateCcw, Archive,
+  ChevronLeft, ChevronRight, AlertCircle, Clock
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -27,7 +28,18 @@ const storage = getStorage(app);
 const KANBAN_COLUMNS = ['Offen', 'In Bearbeitung', 'Blockiert', 'Erledigt'];
 const ANFRAGEN_STATUS = ['Neu / Offen', 'In Bearbeitung', 'Geantwortet', 'Erfolgreich gebucht', 'Absage'];
 
-// --- BILD-KOMPRESSION HELPER ---
+// --- HELPER ---
+const getDaysUntil = (dateString) => {
+    if (!dateString) return null;
+    const target = new Date(dateString);
+    if (isNaN(target.getTime())) return null;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    target.setHours(0,0,0,0);
+    const diffTime = target - today;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
 const loadCompressor = () => new Promise((resolve, reject) => {
     if (window.imageCompression) return resolve(window.imageCompression);
     const script = document.createElement('script');
@@ -49,6 +61,64 @@ const compressImage = async (file) => {
     }
 };
 
+const compressVideo = (file, onProgress) => {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.src = URL.createObjectURL(file);
+        video.muted = true; 
+        video.playsInline = true;
+
+        video.onloadedmetadata = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            let targetWidth = 1280;
+            let targetHeight = 720;
+            if (video.videoWidth < video.videoHeight) {
+                targetWidth = 720;
+                targetHeight = 1280;
+            }
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            video.play().catch(reject);
+
+            const stream = canvas.captureStream(30);
+            
+            const recorder = new MediaRecorder(stream, { 
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 1500000 
+            });
+            
+            const chunks = [];
+            recorder.ondataavailable = e => chunks.push(e.data);
+            
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const webmFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + "_compressed.webm", { type: 'video/webm' });
+                resolve(webmFile);
+            };
+
+            let interval;
+            video.onplay = () => {
+                recorder.start();
+                interval = setInterval(() => {
+                    ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+                    if (onProgress) onProgress(Math.round((video.currentTime / video.duration) * 100));
+                    if (video.ended) {
+                        clearInterval(interval);
+                        recorder.stop();
+                    }
+                }, 1000 / 30);
+            };
+            video.onerror = () => {
+                clearInterval(interval);
+                reject(new Error("Video konnte nicht verarbeitet werden."));
+            };
+        };
+    });
+};
+
 const DEFAULT_ANGEBOTE = [
     { id: "mock-s1", title: "Hochtouren", season: "Sommer", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen.", image: "/hochtour.jpg" },
     { id: "mock-s2", title: "Alpinklettern", season: "Sommer", desc: "In den besten Granit- und Kalkwänden der Schweiz.", longDesc: "Mehrseillängen-Träume in bestem Fels. Von der Furka bis ins Bergell – wir finden die perfekte Linie für dein Level.", image: "/alpinklettern.jpg" },
@@ -64,7 +134,8 @@ const getKat = (t, defaultCats) => {
 const getTech = (t) => t && t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t && t.ausdauer ? Number(t.ausdauer) : 2;
 
-export default function AdminArea({ user, touren, onLogout }) {
+// Wichtig: touren = [] als Fallback hinzugefügt
+export default function AdminArea({ user, touren = [], onLogout }) {
   const [adminSubView, setAdminSubView] = useState('dashboard');
   
   // Data States
@@ -107,6 +178,8 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [editingTeamMember, setEditingTeamMember] = useState(null);
   const [editingAngebot, setEditingAngebot] = useState(null);
   
+  const [pendingDeletes, setPendingDeletes] = useState([]);
+
   const [showDocKategorienModal, setShowDocKategorienModal] = useState(false);
   const [showTaskKategorienModal, setShowTaskKategorienModal] = useState(false);
   const [showProtocolKategorienModal, setShowProtocolKategorienModal] = useState(false);
@@ -123,10 +196,11 @@ export default function AdminArea({ user, touren, onLogout }) {
   const [anfragenStatusFilter, setAnfragenStatusFilter] = useState('Alle');
   const [anfragenSearch, setAnfragenSearch] = useState('');
 
-  const [anmeldungenView, setAnmeldungenView] = useState('active'); // active, archived
+  const [anmeldungenView, setAnmeldungenView] = useState('active'); 
   const [trashTab, setTrashTab] = useState('touren');
 
   const [isUploading, setIsUploading] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]);
 
@@ -182,43 +256,47 @@ export default function AdminArea({ user, touren, onLogout }) {
       } catch (e) { console.error("Konnte Datei nicht aus dem Storage löschen:", url, e); }
   };
 
-  // --- ANMELDUNGEN LÖSCHEN & ARCHIVIEREN ---
+  const moveImage = (array, setArray, idx, dir) => {
+      const newArr = [...array];
+      if (idx + dir < 0 || idx + dir >= newArr.length) return;
+      const temp = newArr[idx];
+      newArr[idx] = newArr[idx + dir];
+      newArr[idx + dir] = temp;
+      setArray(newArr);
+  };
+
   const deleteAnmeldung = async (anm, title) => {
       if(!confirm(`Anmeldung von ${anm.vorname} ${anm.name} wirklich löschen/stornieren?`)) return;
       try {
           await deleteDoc(doc(db, 'anmeldungen', anm.id));
-          // Wenn die Anmeldung NICHT im Archiv war, setze die Tour-Kapazität wieder 1 rauf (angemeldet -1)
           if (!anm.isArchived && anm.tourId && !anm.tourId.startsWith('mock-')) {
               await updateDoc(doc(db, 'touren', anm.tourId), { angemeldet: increment(-1) });
           }
           logAction(`Anmeldung storniert/gelöscht: ${anm.vorname} ${anm.name} für ${title}`);
       } catch (e) {
           alert("Fehler beim Löschen.");
-          console.error(e);
       }
   };
 
   const archiveTourBookings = async (title, teilnehmer) => {
-      if (!confirm(`Möchtest du alle aktuellen Anmeldungen für "${title}" ins Archiv verschieben?\n\nDie gebuchten Plätze bei der Tour werden dadurch wieder auf 0 gesetzt (Saison-Reset).`)) return;
+      const archiveLabel = prompt(`Möchtest du alle aktuellen Anmeldungen für "${title}" ins Archiv verschieben?\n\nGib ein Datum/Saison als Label ein (z.B. "Sommer 2024"). Dieses Label wird im Kundenstamm sichtbar sein.\n\nDie gebuchten Plätze der Tour werden danach auf 0 gesetzt.`, new Date().toLocaleDateString('de-CH', { month: '2-digit', year: 'numeric' }));
+      if (!archiveLabel) return; 
+      
       try {
-          // Update alle Teilnehmer -> isArchived: true
-          await Promise.all(teilnehmer.map(anm => updateDoc(doc(db, 'anmeldungen', anm.id), { isArchived: true, archivedAt: Date.now() })));
+          await Promise.all(teilnehmer.map(anm => updateDoc(doc(db, 'anmeldungen', anm.id), { isArchived: true, archivedAt: Date.now(), archiveLabel: archiveLabel })));
           
-          // Finde die Tour ID und setze den Zähler zurück
           const tourId = teilnehmer[0]?.tourId;
           if (tourId && !tourId.startsWith('mock-')) {
               await updateDoc(doc(db, 'touren', tourId), { angemeldet: 0 });
           }
           
-          logAction(`Saison-Reset: Anmeldungen für "${title}" archiviert.`);
+          logAction(`Saison-Reset: Anmeldungen für "${title}" archiviert (${archiveLabel}).`);
           alert("Erfolgreich archiviert! Die Tour hat nun wieder 0 Buchungen.");
       } catch (e) {
           alert("Fehler beim Archivieren.");
-          console.error(e);
       }
   };
 
-  // --- PAPIERKORB FUNKTIONEN (Soft Delete -> Hard Delete) ---
   const softDelete = async (colName, id, title) => {
       if (id.startsWith('mock-')) return alert("Beispieldaten können nicht gelöscht werden.");
       if (!confirm(`"${title}" in den Papierkorb verschieben?`)) return;
@@ -250,7 +328,6 @@ export default function AdminArea({ user, touren, onLogout }) {
 
           await deleteDoc(doc(db, colName, item.id));
           logAction(`${colName} endgültig gelöscht: ${title}`);
-          
       } catch (e) {
           alert("Fehler beim endgültigen Löschen.");
       }
@@ -292,8 +369,8 @@ export default function AdminArea({ user, touren, onLogout }) {
   const filteredKunden = kundenStamm.filter(k => k.name.toLowerCase().includes(kundenSearch.toLowerCase()) || k.vorname.toLowerCase().includes(kundenSearch.toLowerCase()) || k.email.toLowerCase().includes(kundenSearch.toLowerCase()));
 
   const exportToExcel = (exportData) => {
-    const headers = ["Tour", "Vorname", "Name", "Email", "Telefon", "Adresse", "PLZ/Ort", "Ernaehrung", "Bemerkung", "Status", "Zuständig", "Ist Archiviert"];
-    const rows = exportData.map(a => [ a.tourTitle, a.vorname, a.name, a.email, `'${a.phone}`, a.adresse, a.plz_ort, a.ernaehrung, (a.besonderes || "").replace(/\n/g, " "), a.status || 'Neu', a.zustaendig || 'Unzugewiesen', a.isArchived ? 'Ja' : 'Nein' ]);
+    const headers = ["Tour", "Vorname", "Name", "Email", "Telefon", "Adresse", "PLZ/Ort", "Ernaehrung", "Bemerkung", "Status", "Zuständig", "Archiviert", "Archiv-Datum"];
+    const rows = exportData.map(a => [ a.tourTitle, a.vorname, a.name, a.email, `'${a.phone}`, a.adresse, a.plz_ort, a.ernaehrung, (a.besonderes || "").replace(/\n/g, " "), a.status || 'Neu', a.zustaendig || 'Unzugewiesen', a.isArchived ? 'Ja' : 'Nein', a.archiveLabel || '' ]);
     let csvContent = "\uFEFF" + headers.join(";") + "\r\n";
     rows.forEach(row => { csvContent += row.join(";") + "\r\n"; });
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -330,17 +407,26 @@ export default function AdminArea({ user, touren, onLogout }) {
       return '';
   };
 
-  // --- SAVE HERO VIDEO ---
   const handleHeroVideoUpload = async (e) => {
       const files = Array.from(e.target.files);
       if(files.length === 0) return;
       setIsUploading(true);
+      setVideoProgress(0);
       
       try {
           const newUrls = [];
           for(const file of files) {
-              const storageRef = ref(storage, `website/hero-${Date.now()}-${file.name}`);
-              const snap = await uploadBytes(storageRef, file);
+              let finalFile = file;
+              try {
+                  finalFile = await compressVideo(file, setVideoProgress);
+              } catch (err) {
+                  console.error("Fehler bei Video-Komprimierung, lade Original hoch.", err);
+              }
+
+              setVideoProgress(null); 
+              
+              const storageRef = ref(storage, `website/hero-${Date.now()}-${finalFile.name}`);
+              const snap = await uploadBytes(storageRef, finalFile);
               const url = await getDownloadURL(snap.ref);
               newUrls.push(url);
           }
@@ -351,6 +437,7 @@ export default function AdminArea({ user, touren, onLogout }) {
           alert("Fehler beim Video-Upload.");
       }
       setIsUploading(false);
+      setVideoProgress(null);
   };
 
   const deleteHeroVideo = async (url) => {
@@ -363,8 +450,6 @@ export default function AdminArea({ user, touren, onLogout }) {
       } catch(e) { alert("Fehler beim Löschen."); }
   };
 
-
-  // --- SAVE ANGEBOT ---
   const saveAngebot = async (e) => {
     e.preventDefault();
     setIsUploading(true);
@@ -386,6 +471,8 @@ export default function AdminArea({ user, touren, onLogout }) {
             imageUrls = await Promise.all(uploadPromises);
         }
         
+        await Promise.all(pendingDeletes.map(url => deleteStorageFile(url)));
+        
         const isMock = editingAngebot && editingAngebot.id ? editingAngebot.id.startsWith('mock-') : false;
         const combinedImages = [...(editingAngebot.images || []), ...imageUrls];
 
@@ -394,7 +481,7 @@ export default function AdminArea({ user, touren, onLogout }) {
             season: fd.get('season'),
             desc: fd.get('desc'),
             longDesc: fd.get('longDesc'),
-            image: combinedImages[0] || (editingAngebot ? editingAngebot.image : ''), 
+            image: combinedImages[0] || '', 
             images: combinedImages,
             isDeleted: false
         };
@@ -406,12 +493,12 @@ export default function AdminArea({ user, touren, onLogout }) {
             await addDoc(collection(db, 'angebote'), data);
             logAction(`Neues Angebot erstellt: ${data.title}`);
         }
+        setPendingDeletes([]);
         setEditingAngebot(null);
     } catch (err) { alert("Fehler beim Speichern."); } 
     finally { setIsUploading(false); }
   };
 
-  // --- SAVE TEAM MEMBER ---
   const saveTeamMember = async (e) => {
     e.preventDefault();
     setIsUploading(true);
@@ -438,6 +525,8 @@ export default function AdminArea({ user, touren, onLogout }) {
             imageUrls = await Promise.all(uploadPromises);
         }
         
+        await Promise.all(pendingDeletes.map(url => deleteStorageFile(url)));
+
         const combinedImages = [...(editingTeamMember.images || []), ...imageUrls];
 
         const data = {
@@ -458,12 +547,12 @@ export default function AdminArea({ user, touren, onLogout }) {
             await addDoc(collection(db, 'team_profiles'), data);
             logAction(`Neues Teammitglied erstellt: ${data.name}`);
         }
+        setPendingDeletes([]);
         setEditingTeamMember(null);
     } catch (err) { alert("Fehler beim Speichern."); } 
     finally { setIsUploading(false); }
   };
 
-  // --- SAVE MATERIAL LIST ---
   const saveMaterialList = async (e) => {
       e.preventDefault();
       setIsUploading(true);
@@ -487,7 +576,6 @@ export default function AdminArea({ user, touren, onLogout }) {
       }
   };
 
-  // --- SAVE TOUR ---
   const saveTour = async (e) => {
     e.preventDefault();
     setIsUploading(true);
@@ -523,6 +611,8 @@ export default function AdminArea({ user, touren, onLogout }) {
             imageUrls = await Promise.all(uploadPromises);
         }
         
+        await Promise.all(pendingDeletes.map(url => deleteStorageFile(url)));
+        
         const isMock = editingTour && editingTour.id ? editingTour.id.startsWith('mock-') : false;
         const combinedImages = [...(editingTour.images || []), ...imageUrls];
 
@@ -542,12 +632,14 @@ export default function AdminArea({ user, touren, onLogout }) {
             materialUrl: selectedMaterial ? selectedMaterial.url : '',
             guide: fd.get('guide') || '',
             interneNotizen: fd.get('interneNotizen') || '',
+            stornoFrist: fd.get('stornoFrist') || '',
             kategorie: fd.get('kategorie') || tourKategorien[0] || 'Hochtour',
             technik: parseInt(fd.get('technik')) || 2,
             ausdauer: parseInt(fd.get('ausdauer')) || 2,
+            minPlaetze: parseInt(fd.get('minPlaetze')) || 1, // NEU: Min. Plätze speichern
+            maxPlaetze: parseInt(fd.get('maxPlaetze')) || 4,
             image: combinedImages[0] || '/hochtour.jpg', 
             images: combinedImages, 
-            maxPlaetze: parseInt(fd.get('maxPlaetze')) || 4,
             angemeldet: (editingTour && editingTour.id && !isMock) ? editingTour.angemeldet : 0,
             isDeleted: false
         };
@@ -559,6 +651,7 @@ export default function AdminArea({ user, touren, onLogout }) {
             await addDoc(collection(db, 'touren'), data);
             logAction(`Neue Tour/Idee erstellt: ${data.title}`);
         }
+        setPendingDeletes([]);
         setEditingTour(null);
     } catch (err) { alert("Fehler beim Speichern der Tour."); } 
     finally { setIsUploading(false); }
@@ -704,7 +797,7 @@ export default function AdminArea({ user, touren, onLogout }) {
   };
 
   const getFilteredAnfragen = () => {
-      let filtered = anfragen.filter(a => !a.isDeleted);
+      let filtered = (anfragen || []).filter(a => !a.isDeleted);
       if (anfragenStatusFilter !== 'Alle') {
           if (anfragenStatusFilter === 'Neu / Offen') {
               filtered = filtered.filter(a => !a.status || a.status === 'Neu / Offen');
@@ -724,6 +817,10 @@ export default function AdminArea({ user, touren, onLogout }) {
   };
 
   const displayedAnmeldungen = anmeldungen.filter(a => anmeldungenView === 'active' ? !a.isArchived : a.isArchived);
+
+  // --- BERECHNUNG DER FRISTEN (WARNINGS) ---
+  const urgentTours = (touren || []).filter(t => !t.isDeleted && !t.isExample && t.visible !== false && t.stornoFrist && getDaysUntil(t.stornoFrist) !== null && getDaysUntil(t.stornoFrist) <= 3 && getDaysUntil(t.stornoFrist) >= -30);
+  const urgentTasks = (tasks || []).filter(t => !t.isDeleted && t.status !== 'Erledigt' && t.dueDate && getDaysUntil(t.dueDate) !== null && getDaysUntil(t.dueDate) <= 3 && getDaysUntil(t.dueDate) >= -30);
 
   return (
     <div className="min-h-screen bg-bg text-accent selection:bg-black selection:text-white">
@@ -781,6 +878,46 @@ export default function AdminArea({ user, touren, onLogout }) {
             {adminSubView === 'dashboard' && (
               <div className="fade-in space-y-12 max-w-7xl mx-auto w-full">
                 <h3 className="serif text-3xl italic">Willkommen zurück</h3>
+
+                {/* --- FRISTEN & WARNINGS --- */}
+                {(urgentTours.length > 0 || urgentTasks.length > 0) && (
+                    <div className="bg-amber-50 border border-amber-200 p-6 shadow-sm">
+                        <h4 className="text-amber-800 font-bold uppercase tracking-widest text-[11px] mb-4 flex items-center gap-2"><AlertCircle size={16}/> Achtung: Anstehende Fristen & Deadlines</h4>
+                        <div className="space-y-3">
+                            {urgentTours.map(t => {
+                                const days = getDaysUntil(t.stornoFrist);
+                                const isOverdue = days < 0;
+                                return (
+                                    <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 border border-amber-100 cursor-pointer hover:border-black transition" onClick={() => { setAdminSubView('touren'); setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])}); }}>
+                                        <div className="mb-2 sm:mb-0">
+                                            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 bg-zinc-100 px-2 py-0.5 mr-3 rounded-sm">Tour Stornofrist</span>
+                                            <span className="font-bold text-sm">{t.title}</span>
+                                        </div>
+                                        <span className={`text-[10px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-sm ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                                            {isOverdue ? `Abgelaufen vor ${Math.abs(days)} Tag(en)` : (days === 0 ? 'Frist endet HEUTE!' : `Frist endet in ${days} Tag(en)`)}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                            {urgentTasks.map(t => {
+                                const days = getDaysUntil(t.dueDate);
+                                const isOverdue = days < 0;
+                                return (
+                                    <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 border border-amber-100 cursor-pointer hover:border-black transition" onClick={() => { setAdminSubView('aufgaben'); setEditingTask(t); }}>
+                                        <div className="mb-2 sm:mb-0">
+                                            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 bg-zinc-100 px-2 py-0.5 mr-3 rounded-sm">Aufgabe</span>
+                                            <span className="font-bold text-sm">{t.title}</span>
+                                        </div>
+                                        <span className={`text-[10px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-sm ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                                            {isOverdue ? `Fällig seit ${Math.abs(days)} Tag(en)` : (days === 0 ? 'Fällig HEUTE!' : `Fällig in ${days} Tag(en)`)}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Offene Aufgaben</p><p className="serif text-3xl italic">{tasks.filter(t => t.status !== 'Erledigt' && !t.isDeleted).length}</p></div>
                   <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Neue Anfragen</p><p className="serif text-3xl italic">{anfragen.filter(a => (!a.status || a.status === 'Neu / Offen') && !a.isDeleted).length}</p></div>
@@ -824,6 +961,7 @@ export default function AdminArea({ user, touren, onLogout }) {
               </div>
             )}
 
+            {/* NEU: WEBSITE / HERO VIDEO ADMIN */}
             {adminSubView === 'website' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -831,18 +969,30 @@ export default function AdminArea({ user, touren, onLogout }) {
                     </div>
                     <p className="text-sm text-zinc-500 mb-8 max-w-3xl">Hier kannst du das Hintergrund-Video (Hero-Video) für die Startseite austauschen. Lädst du mehrere Videos hoch, wird bei jedem Aufruf der Webseite zufällig eines davon abgespielt.</p>
 
-                    <div className="bg-zinc-50 border border-zinc-200 p-6 shadow-sm mb-12">
-                        <h4 className="text-[11px] font-bold uppercase tracking-widest border-b border-zinc-200 pb-3 mb-6">Neues Video hochladen</h4>
-                        <div className="flex flex-col md:flex-row items-center gap-6">
+                    <div className="bg-zinc-50 border border-zinc-200 p-6 shadow-sm mb-12 relative overflow-hidden">
+                        <h4 className="text-[11px] font-bold uppercase tracking-widest border-b border-zinc-200 pb-3 mb-6">Neues Video hochladen & komprimieren</h4>
+                        <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
                             <input 
                                 type="file" 
-                                accept="video/mp4,video/webm" 
+                                accept="video/mp4,video/webm,video/quicktime" 
                                 multiple
                                 onChange={handleHeroVideoUpload}
                                 className="w-full md:w-auto text-sm cursor-pointer border border-zinc-300 bg-white p-2" 
                             />
-                            {isUploading && <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 animate-pulse">Lädt hoch... Bitte warten.</span>}
+                            {videoProgress !== null && (
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-black bg-amber-200 px-4 py-2">
+                                    Verarbeite Video ({videoProgress}%)... Bitte diesen Tab offen lassen!
+                                </span>
+                            )}
+                            {(isUploading && videoProgress === null) && (
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 animate-pulse">
+                                    Lädt hoch...
+                                </span>
+                            )}
                         </div>
+                        {videoProgress !== null && (
+                            <div className="absolute bottom-0 left-0 h-1 bg-amber-400 transition-all duration-300 ease-out" style={{ width: `${videoProgress}%` }}></div>
+                        )}
                     </div>
 
                     <h4 className="text-[11px] font-bold uppercase tracking-widest border-b border-zinc-200 pb-3 mb-6">Aktive Startseiten-Videos ({(websiteSettings.heroVideos || []).length})</h4>
@@ -868,11 +1018,12 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
+            {/* ANGEBOTE ADMIN */}
             {adminSubView === 'angebote' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <h3 className="serif text-3xl italic">Angebote (Kategorien) verwalten</h3>
-                        <button onClick={() => setEditingAngebot({ title: '', season: 'Sommer', desc: '', longDesc: '', image: '' })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neues Angebot</button>
+                        <button onClick={() => { setEditingAngebot({ title: '', season: 'Sommer', desc: '', longDesc: '', image: '' }); setPendingDeletes([]); }} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neues Angebot</button>
                     </div>
 
                     {editingAngebot ? (
@@ -896,20 +1047,26 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Bilder für dieses Angebot</label>
                                 
                                 <div className="flex flex-wrap gap-4 mb-4">
-                                    {(editingAngebot.images || (editingAngebot.image ? [editingAngebot.image] : [])).map((imgUrl, idx) => (
+                                    {(editingAngebot.images || (editingAngebot.image ? [editingAngebot.image] : [])).map((imgUrl, idx, arr) => (
                                         <div key={idx} className="relative w-32 h-32 bg-zinc-100 border border-zinc-200 shadow-sm group/img">
                                             <img src={imgUrl} alt="Angebotbild" className="w-full h-full object-cover" />
                                             <button 
                                                 type="button" 
                                                 onClick={() => {
-                                                    const newImages = [...(editingAngebot.images || (editingAngebot.image ? [editingAngebot.image] : []))];
+                                                    setPendingDeletes([...pendingDeletes, imgUrl]);
+                                                    const newImages = [...arr];
                                                     newImages.splice(idx, 1);
                                                     setEditingAngebot({...editingAngebot, images: newImages});
                                                 }}
-                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-10"
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-20"
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
+                                            <div className="absolute bottom-0 w-full flex justify-between bg-black/50 p-1 opacity-100 md:opacity-0 group-hover/img:opacity-100 transition-opacity z-10">
+                                                {idx > 0 ? <button type="button" onClick={() => moveImage(arr, newArr => setEditingAngebot({...editingAngebot, images: newArr}), idx, -1)} className="p-1 hover:bg-white/20 rounded"><ChevronLeft size={16} className="text-white"/></button> : <div/>}
+                                                {idx < arr.length - 1 ? <button type="button" onClick={() => moveImage(arr, newArr => setEditingAngebot({...editingAngebot, images: newArr}), idx, 1)} className="p-1 hover:bg-white/20 rounded"><ChevronRight size={16} className="text-white"/></button> : <div/>}
+                                            </div>
+                                            {idx === 0 && <div className="absolute bottom-8 inset-x-0 bg-black/70 text-white text-[8px] uppercase tracking-widest text-center py-1.5 backdrop-blur-sm pointer-events-none">Titelbild</div>}
                                         </div>
                                     ))}
                                     {(editingAngebot.images || (editingAngebot.image ? [editingAngebot.image] : [])).length === 0 && <p className="text-xs text-zinc-400 italic py-4">Noch keine Bilder hinzugefügt.</p>}
@@ -928,7 +1085,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                             </div>
 
                             <div className="flex flex-col-reverse sm:flex-row justify-end gap-4 pt-8 border-t border-zinc-200">
-                                <button type="button" onClick={() => setEditingAngebot(null)} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
+                                <button type="button" onClick={() => { setEditingAngebot(null); setPendingDeletes([]); }} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
                                 <button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition text-center">{isUploading ? 'Lädt...' : 'Speichern'}</button>
                             </div>
                         </form>
@@ -950,7 +1107,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
-                                        <button onClick={() => setEditingAngebot({...angebot, images: angebot.images || (angebot.image ? [angebot.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
+                                        <button onClick={() => { setEditingAngebot({...angebot, images: angebot.images || (angebot.image ? [angebot.image] : [])}); setPendingDeletes([]); }} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
                                         <button onClick={() => softDelete('angebote', angebot.id, angebot.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
                                 </div>
@@ -960,13 +1117,14 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
+            {/* TEAM PROFILES ADMIN */}
             {adminSubView === 'team' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <h3 className="serif text-3xl italic">Internes Team & Bergführer</h3>
                         <div className="flex flex-wrap gap-2 w-full md:w-auto">
                             <button onClick={() => setShowTeamAttributesModal(true)} className="flex-1 md:flex-none justify-center border border-zinc-300 p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50 transition"><Settings size={14}/> Steckbrief-Felder anpassen</button>
-                            <button onClick={() => setEditingTeamMember({ name: '', title: 'BERGFÜHRER IVBV', desc: '', visible: true })} className="flex-1 md:flex-none justify-center bg-black text-white p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition shadow-md"><Plus size={14}/> Neues Profil</button>
+                            <button onClick={() => { setEditingTeamMember({ name: '', title: 'BERGFÜHRER IVBV', desc: '', visible: true }); setPendingDeletes([]); }} className="flex-1 md:flex-none justify-center bg-black text-white p-3 px-6 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition shadow-md"><Plus size={14}/> Neues Profil</button>
                         </div>
                     </div>
 
@@ -1000,20 +1158,26 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Profilbilder (Erstes Bild = Avatar)</label>
                                 
                                 <div className="flex flex-wrap gap-4 mb-4">
-                                    {(editingTeamMember.images || (editingTeamMember.image ? [editingTeamMember.image] : [])).map((imgUrl, idx) => (
+                                    {(editingTeamMember.images || (editingTeamMember.image ? [editingTeamMember.image] : [])).map((imgUrl, idx, arr) => (
                                         <div key={idx} className="relative w-32 h-32 bg-zinc-100 border border-zinc-200 shadow-sm group/img">
                                             <img src={imgUrl} alt="Profilbild" className="w-full h-full object-cover" />
                                             <button 
                                                 type="button" 
                                                 onClick={() => {
-                                                    const newImages = [...(editingTeamMember.images || (editingTeamMember.image ? [editingTeamMember.image] : []))];
+                                                    setPendingDeletes([...pendingDeletes, imgUrl]);
+                                                    const newImages = [...arr];
                                                     newImages.splice(idx, 1);
                                                     setEditingTeamMember({...editingTeamMember, images: newImages});
                                                 }}
-                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-10"
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-20"
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
+                                            <div className="absolute bottom-0 w-full flex justify-between bg-black/50 p-1 opacity-100 md:opacity-0 group-hover/img:opacity-100 transition-opacity z-10">
+                                                {idx > 0 ? <button type="button" onClick={() => moveImage(arr, newArr => setEditingTeamMember({...editingTeamMember, images: newArr}), idx, -1)} className="p-1 hover:bg-white/20 rounded"><ChevronLeft size={16} className="text-white"/></button> : <div/>}
+                                                {idx < arr.length - 1 ? <button type="button" onClick={() => moveImage(arr, newArr => setEditingTeamMember({...editingTeamMember, images: newArr}), idx, 1)} className="p-1 hover:bg-white/20 rounded"><ChevronRight size={16} className="text-white"/></button> : <div/>}
+                                            </div>
+                                            {idx === 0 && <div className="absolute bottom-8 inset-x-0 bg-black/70 text-white text-[8px] uppercase tracking-widest text-center py-1.5 backdrop-blur-sm pointer-events-none">Avatar</div>}
                                         </div>
                                     ))}
                                     {(editingTeamMember.images || (editingTeamMember.image ? [editingTeamMember.image] : [])).length === 0 && <p className="text-xs text-zinc-400 italic py-4">Noch keine Bilder hinzugefügt.</p>}
@@ -1045,7 +1209,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                             </div>
 
                             <div className="flex flex-col-reverse sm:flex-row justify-end gap-4 pt-8 border-t border-zinc-200">
-                                <button type="button" onClick={() => setEditingTeamMember(null)} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
+                                <button type="button" onClick={() => { setEditingTeamMember(null); setPendingDeletes([]); }} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
                                 <button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition text-center">{isUploading ? 'Lädt...' : 'Profil Speichern'}</button>
                             </div>
                         </form>
@@ -1068,7 +1232,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
-                                        <button onClick={() => setEditingTeamMember({...member, images: member.images || (member.image ? [member.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
+                                        <button onClick={() => { setEditingTeamMember({...member, images: member.images || (member.image ? [member.image] : [])}); setPendingDeletes([]); }} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
                                         <button onClick={() => softDelete('team_profiles', member.id, member.name)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
                                 </div>
@@ -1079,6 +1243,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
+            {/* MATERIAL MANAGER ADMIN */}
             {adminSubView === 'material' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -1115,7 +1280,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                         </div>
                                         <div className="flex items-center gap-4 border-t sm:border-0 border-zinc-100 pt-3 sm:pt-0">
                                             <a href={list.url} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase tracking-widest hover:text-black text-zinc-500 transition flex items-center gap-2"><ExternalLink size={14}/> PDF</a>
-                                            <button onClick={() => deleteMaterialList(list.id, list.name)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 transition flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
+                                            <button onClick={() => deleteDoc(doc(db, 'material_lists', list.id))} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 transition flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                         </div>
                                     </div>
                                 ))}
@@ -1291,7 +1456,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                                     <span className="text-[9px] text-zinc-400 tracking-widest">{anm.timestamp ? new Date(anm.timestamp.seconds * 1000).toLocaleDateString('de-CH') : ''}</span>
                                                                     <p className="font-bold text-base mt-1">
                                                                         {anm.tourTitle}
-                                                                        {anm.isArchived && <span className="ml-2 text-[8px] bg-zinc-200 text-zinc-500 px-2 py-0.5 rounded-sm uppercase tracking-widest font-bold">Archiviert</span>}
+                                                                        {anm.isArchived && <span className="ml-2 text-[8px] bg-zinc-200 text-zinc-500 px-2 py-0.5 rounded-sm uppercase tracking-widest font-bold">Archiviert {anm.archiveLabel && `(${anm.archiveLabel})`}</span>}
                                                                     </p>
                                                                     {anm.besonderes && <p className="text-sm text-zinc-600 mt-2 italic bg-white p-3 border border-zinc-100">"{anm.besonderes}"</p>}
                                                                 </div>
@@ -1326,7 +1491,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
-            {/* ANFRAGEN ADMIN */}
             {adminSubView === 'anfragen' && (
                 <div className="fade-in max-w-5xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -1407,12 +1571,11 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
-            {/* TOUREN ADMIN */}
             {adminSubView === 'touren' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <h3 className="serif text-3xl italic">Touren Verwalten</h3>
-                        <button onClick={() => setEditingTour({ title: '', visible: true, isExample: false, date: '', description: '', price: '', image: '', maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', kategorie: tourKategorien[0] || 'Hochtour', technik: 2, ausdauer: 2 })} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
+                        <button onClick={() => { setEditingTour({ title: '', visible: true, isExample: false, date: '', description: '', price: '', image: '', minPlaetze: 1, maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', stornoFrist: '', kategorie: tourKategorien[0] || 'Hochtour', technik: 2, ausdauer: 2 }); setPendingDeletes([]); }} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
                     </div>
 
                     {!editingTour && (
@@ -1467,29 +1630,37 @@ export default function AdminArea({ user, touren, onLogout }) {
                                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel der Tour</label><input name="title" defaultValue={editingTour.title} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
                                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Datum / Zeitraum <span className="font-normal normal-case">(optional bei Beispieltouren)</span></label><input name="date" defaultValue={editingTour.date} className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
                                 <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Preis <span className="font-normal normal-case">(optional bei Beispieltouren)</span></label><input name="price" defaultValue={editingTour.price} className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
-                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Max. Teilnehmer</label><input name="maxPlaetze" type="number" defaultValue={editingTour.maxPlaetze} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Min. Teilnehmer</label><input name="minPlaetze" type="number" defaultValue={editingTour.minPlaetze || 1} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
+                                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Max. Teilnehmer</label><input name="maxPlaetze" type="number" defaultValue={editingTour.maxPlaetze} required className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition" /></div>
+                                </div>
                             </div>
                             
                             <div className="pt-6 border-t border-zinc-200 md:col-span-2">
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Bilder der Tour (Erstes Bild = Titelbild)</label>
                                 
                                 <div className="flex flex-wrap gap-4 mb-4">
-                                    {(editingTour.images || []).map((imgUrl, idx) => (
+                                    {(editingTour.images || []).map((imgUrl, idx, arr) => (
                                         <div key={idx} className="relative w-32 h-32 bg-zinc-100 border border-zinc-200 shadow-sm group/img">
                                             <img src={imgUrl} alt="Tourbild" className="w-full h-full object-cover" />
                                             <button 
                                                 type="button" 
                                                 onClick={() => {
-                                                    const newImages = [...editingTour.images];
+                                                    setPendingDeletes([...pendingDeletes, imgUrl]);
+                                                    const newImages = [...arr];
                                                     newImages.splice(idx, 1);
                                                     setEditingTour({...editingTour, images: newImages});
                                                 }}
-                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-10"
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-100 md:opacity-0 group-hover/img:opacity-100 hover:scale-110 transition-all z-20"
                                                 title="Bild entfernen"
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
-                                            {idx === 0 && <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[8px] uppercase tracking-widest text-center py-1.5 backdrop-blur-sm">Titelbild</div>}
+                                            <div className="absolute bottom-0 w-full flex justify-between bg-black/50 p-1 opacity-100 md:opacity-0 group-hover/img:opacity-100 transition-opacity z-10">
+                                                {idx > 0 ? <button type="button" onClick={() => moveImage(arr, newArr => setEditingTour({...editingTour, images: newArr}), idx, -1)} className="p-1 hover:bg-white/20 rounded"><ChevronLeft size={16} className="text-white"/></button> : <div/>}
+                                                {idx < arr.length - 1 ? <button type="button" onClick={() => moveImage(arr, newArr => setEditingTour({...editingTour, images: newArr}), idx, 1)} className="p-1 hover:bg-white/20 rounded"><ChevronRight size={16} className="text-white"/></button> : <div/>}
+                                            </div>
+                                            {idx === 0 && <div className="absolute bottom-8 inset-x-0 bg-black/70 text-white text-[8px] uppercase tracking-widest text-center py-1.5 backdrop-blur-sm pointer-events-none">Titelbild</div>}
                                         </div>
                                     ))}
                                     {(editingTour.images || []).length === 0 && <p className="text-xs text-zinc-400 italic py-4">Noch keine Bilder hinzugefügt.</p>}
@@ -1563,16 +1734,24 @@ export default function AdminArea({ user, touren, onLogout }) {
                             <div className="pt-6 border-t border-zinc-200 md:col-span-2">
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2 mb-2"><Lock size={14}/> Interne Bemerkungen (Nur für Admin sichtbar)</label>
                                 <textarea name="interneNotizen" defaultValue={editingTour.interneNotizen} placeholder="Z.B. Reservationsstatus, versteckte Infos, Bemerkungen für den Guide..." className="w-full border border-zinc-300 bg-[#fffdf0] p-4 text-sm h-24 resize-y outline-none focus:border-black transition" />
+                                
+                                <div className="mt-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 whitespace-nowrap">Kostenlose Stornierung bis (Deadline):</label>
+                                    <div className="w-full sm:flex-1">
+                                        <input type="date" name="stornoFrist" defaultValue={editingTour.stornoFrist || ''} className="w-full sm:w-auto border border-zinc-300 p-3 text-sm outline-none focus:border-black transition" />
+                                        <p className="text-xs text-zinc-400 mt-2">Wenn diese Frist in weniger als 3 Tagen abläuft, erhältst du eine Warnung auf dem Dashboard.</p>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex flex-col-reverse sm:flex-row justify-end gap-4 pt-8 border-t border-zinc-200">
-                                <button type="button" onClick={() => setEditingTour(null)} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
+                                <button type="button" onClick={() => { setEditingTour(null); setPendingDeletes([]); }} className="w-full sm:w-auto border border-zinc-300 px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
                                 <button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition text-center">{isUploading ? 'Lädt...' : 'Tour Speichern'}</button>
                             </div>
                         </form>
                     ) : (
                         <div className="space-y-4 fade-in">
-                            {touren.filter(t => {
+                            {(touren || []).filter(t => {
                                 const isVisible = t.visible !== false;
                                 const isExample = t.isExample === true;
                                 
@@ -1593,15 +1772,18 @@ export default function AdminArea({ user, touren, onLogout }) {
                                             {t.visible === false && <span className="text-red-500 bg-red-50 px-2 py-0.5 text-[8px]">[VERSTECKT]</span>}
                                             {t.interneNotizen && <span className="text-amber-600 bg-amber-50 px-2 py-0.5 text-[8px] flex items-center gap-1"><Lock size={10}/> NOTIZ</span>}
                                         </p>
-                                        <p className="text-xs text-zinc-500">{t.date || 'Kein Datum'} — Level T{getTech(t)}/A{getAusd(t)}</p>
+                                        <p className="text-xs text-zinc-500">
+                                            {t.date || 'Kein Datum'} — Level T{getTech(t)}/A{getAusd(t)}
+                                            {t.stornoFrist && <span className="ml-3 px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded-sm">Storno bis: {new Date(t.stornoFrist).toLocaleDateString('de-CH')}</span>}
+                                        </p>
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
-                                        <button onClick={() => setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])})} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
+                                        <button onClick={() => { setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])}); setPendingDeletes([]); }} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
                                         <button onClick={() => softDelete('touren', t.id, t.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
                                 </div>
                             ))}
-                            {touren.filter(t => !t.isDeleted && (tourStatusFilter === 'Beispieltouren' ? t.isExample : (tourStatusFilter === 'Öffentlich' ? (t.visible !== false && !t.isExample) : (t.visible === false))) && (tourKatFilter === 'Alle' || getKat(t, tourKategorien) === tourKatFilter)).length === 0 && (
+                            {(touren || []).filter(t => !t.isDeleted && (tourStatusFilter === 'Beispieltouren' ? t.isExample : (tourStatusFilter === 'Öffentlich' ? (t.visible !== false && !t.isExample) : (t.visible === false))) && (tourKatFilter === 'Alle' || getKat(t, tourKategorien) === tourKatFilter)).length === 0 && (
                                 <div className="text-center p-12 border border-dashed border-zinc-200 text-zinc-400">
                                     <p className="text-sm italic">Keine Touren gefunden, die zu den aktuellen Filtern passen.</p>
                                 </div>
@@ -1611,7 +1793,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                 </div>
             )}
 
-            {/* ANMELDUNGEN ADMIN */}
             {adminSubView === 'anmeldungen' && (
                 <div className="fade-in max-w-7xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
@@ -1650,6 +1831,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                                                 <div className="col-span-4">
                                                     <span className="font-bold text-sm uppercase tracking-widest block mb-1">{a.vorname} {a.name}</span>
                                                     <span className="text-zinc-500 text-xs leading-relaxed">{a.adresse}<br/>{a.plz_ort}</span>
+                                                    {a.isArchived && a.archiveLabel && <span className="mt-2 text-[8px] bg-zinc-200 px-2 py-0.5 rounded-sm uppercase font-bold inline-block">Archiv: {a.archiveLabel}</span>}
                                                 </div>
                                                 <div className="col-span-3">
                                                     <a href={`mailto:${a.email}`} className="text-blue-600 hover:underline block mb-1 break-all text-xs">{a.email}</a>
@@ -1682,7 +1864,7 @@ export default function AdminArea({ user, touren, onLogout }) {
                         <h3 className="serif text-3xl italic">Team-Aufgaben</h3>
                         <div className="flex flex-wrap gap-2 w-full md:w-auto">
                             <button onClick={() => setShowTaskKategorienModal(true)} className="flex-1 md:flex-none justify-center border border-zinc-300 px-6 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-50 transition flex items-center gap-2"><Settings size={14}/> Kategorien</button>
-                            <button onClick={() => setEditingTask({ title: '', status: 'Offen', category: taskKategorien[0] || 'Allgemein', assignee: '' })} className="flex-1 md:flex-none justify-center bg-black text-white px-6 py-3 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Plus size={14}/> Neue Aufgabe</button>
+                            <button onClick={() => setEditingTask({ title: '', status: 'Offen', category: taskKategorien[0] || 'Allgemein', assignee: '', dueDate: '' })} className="flex-1 md:flex-none justify-center bg-black text-white px-6 py-3 text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-800 transition"><Plus size={14}/> Neue Aufgabe</button>
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-8 border-b border-zinc-100 pb-4 w-full">
@@ -1692,10 +1874,15 @@ export default function AdminArea({ user, touren, onLogout }) {
                         {KANBAN_COLUMNS.map(col => (
                             <div key={col} className="w-full md:w-80 flex-shrink-0 bg-zinc-50 border border-zinc-200 p-5 rounded-sm">
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 flex justify-between border-b border-zinc-200 pb-3">
-                                    {col} <span className="bg-zinc-200 px-2 rounded-full text-black">{tasks.filter(t => !t.isDeleted && t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).length}</span>
+                                    {col} <span className="bg-zinc-200 px-2 rounded-full text-black">{(tasks || []).filter(t => !t.isDeleted && t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).length}</span>
                                 </h4>
                                 <div className="space-y-4">
-                                    {tasks.filter(t => !t.isDeleted && t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).map(t => (
+                                    {(tasks || []).filter(t => !t.isDeleted && t.status === col && (taskFilter === 'Alle' || t.category === taskFilter)).map(t => {
+                                        const daysToDue = getDaysUntil(t.dueDate);
+                                        const isUrgent = daysToDue !== null && daysToDue <= 3;
+                                        const isOverdue = daysToDue !== null && daysToDue < 0;
+
+                                        return (
                                         <div key={t.id} onClick={() => setEditingTask(t)} className="bg-white p-5 border border-zinc-200 cursor-pointer hover:border-black transition shadow-sm group">
                                             <div className="flex justify-between items-start mb-3">
                                                 <span className="text-[8px] uppercase tracking-widest text-zinc-500 bg-zinc-100 px-2 py-1">{t.category}</span>
@@ -1703,12 +1890,19 @@ export default function AdminArea({ user, touren, onLogout }) {
                                             </div>
                                             <p className="text-base font-medium leading-relaxed mb-4">{t.title}</p>
                                             {t.description && <p className="text-xs text-zinc-400 line-clamp-2 italic mb-3">"{t.description}"</p>}
+                                            
+                                            {t.dueDate && (
+                                                <div className={`text-[10px] flex items-center gap-1.5 font-bold mb-3 ${isOverdue ? 'text-red-500' : (isUrgent ? 'text-amber-500' : 'text-zinc-500')}`}>
+                                                    <Clock size={12} /> Deadline: {new Date(t.dueDate).toLocaleDateString('de-CH')}
+                                                </div>
+                                            )}
+
                                             <div className="flex justify-between items-center text-[10px] text-zinc-400 border-t border-zinc-100 pt-3">
                                                 <span>{t.createdAt ? new Date(t.createdAt).toLocaleDateString('de-CH') : ''}</span>
                                                 {t.fileUrl && <LinkIcon size={14} className="text-black"/>}
                                             </div>
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             </div>
                         ))}
@@ -1815,12 +2009,12 @@ export default function AdminArea({ user, touren, onLogout }) {
 
                     <div className="flex flex-wrap gap-2 mb-8 border-b border-zinc-100 pb-4 w-full">
                         {[
-                            { id: 'touren', label: `Touren (${touren.filter(t => t.isDeleted).length})` },
-                            { id: 'angebote', label: `Angebote (${angebote.filter(a => a.isDeleted).length})` },
-                            { id: 'team_profiles', label: `Team (${teamProfiles.filter(t => t.isDeleted).length})` },
-                            { id: 'docs', label: `Dokumente (${docs.filter(d => d.isDeleted).length})` },
-                            { id: 'tasks', label: `Aufgaben (${tasks.filter(t => t.isDeleted).length})` },
-                            { id: 'protocols', label: `Protokolle (${protocols.filter(p => p.isDeleted).length})` }
+                            { id: 'touren', label: `Touren (${(touren || []).filter(t => t.isDeleted).length})` },
+                            { id: 'angebote', label: `Angebote (${(angebote || []).filter(a => a.isDeleted).length})` },
+                            { id: 'team_profiles', label: `Team (${(teamProfiles || []).filter(t => t.isDeleted).length})` },
+                            { id: 'docs', label: `Dokumente (${(docs || []).filter(d => d.isDeleted).length})` },
+                            { id: 'tasks', label: `Aufgaben (${(tasks || []).filter(t => t.isDeleted).length})` },
+                            { id: 'protocols', label: `Protokolle (${(protocols || []).filter(p => p.isDeleted).length})` }
                         ].map(tab => (
                             <button key={tab.id} onClick={() => setTrashTab(tab.id)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${trashTab === tab.id ? 'border-red-500 text-red-600' : 'border-transparent text-zinc-400 hover:text-black'}`}>{tab.label}</button>
                         ))}
@@ -1828,37 +2022,37 @@ export default function AdminArea({ user, touren, onLogout }) {
 
                     <div className="bg-white border border-zinc-200">
                         {/* Render based on selected Tab */}
-                        {trashTab === 'touren' && touren.filter(t => t.isDeleted).map(item => (
+                        {trashTab === 'touren' && (touren || []).filter(t => t.isDeleted).map(item => (
                             <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
                                 <div><p className="font-bold text-sm uppercase tracking-widest">{item.title}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
                                 <div className="flex gap-4"><button onClick={() => restoreItem('touren', item.id, item.title)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('touren', item, item.title)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
                             </div>
                         ))}
-                        {trashTab === 'angebote' && angebote.filter(a => a.isDeleted).map(item => (
+                        {trashTab === 'angebote' && (angebote || []).filter(a => a.isDeleted).map(item => (
                             <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
                                 <div><p className="font-bold text-sm uppercase tracking-widest">{item.title}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
                                 <div className="flex gap-4"><button onClick={() => restoreItem('angebote', item.id, item.title)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('angebote', item, item.title)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
                             </div>
                         ))}
-                        {trashTab === 'team_profiles' && teamProfiles.filter(t => t.isDeleted).map(item => (
+                        {trashTab === 'team_profiles' && (teamProfiles || []).filter(t => t.isDeleted).map(item => (
                             <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
                                 <div><p className="font-bold text-sm uppercase tracking-widest">{item.name}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
                                 <div className="flex gap-4"><button onClick={() => restoreItem('team_profiles', item.id, item.name)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('team_profiles', item, item.name)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
                             </div>
                         ))}
-                        {trashTab === 'docs' && docs.filter(d => d.isDeleted).map(item => (
+                        {trashTab === 'docs' && (docs || []).filter(d => d.isDeleted).map(item => (
                             <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
                                 <div><p className="font-bold text-sm uppercase tracking-widest">{item.name}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
                                 <div className="flex gap-4"><button onClick={() => restoreItem('docs', item.id, item.name)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('docs', item, item.name)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
                             </div>
                         ))}
-                        {trashTab === 'tasks' && tasks.filter(t => t.isDeleted).map(item => (
+                        {trashTab === 'tasks' && (tasks || []).filter(t => t.isDeleted).map(item => (
                             <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
                                 <div><p className="font-bold text-sm uppercase tracking-widest">{item.title}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
                                 <div className="flex gap-4"><button onClick={() => restoreItem('tasks', item.id, item.title)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('tasks', item, item.title)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
                             </div>
                         ))}
-                        {trashTab === 'protocols' && protocols.filter(p => p.isDeleted).map(item => (
+                        {trashTab === 'protocols' && (protocols || []).filter(p => p.isDeleted).map(item => (
                             <div key={item.id} className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-zinc-100 gap-4">
                                 <div><p className="font-bold text-sm uppercase tracking-widest">{item.title}</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Gelöscht am: {item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : 'Unbekannt'}</p></div>
                                 <div className="flex gap-4"><button onClick={() => restoreItem('protocols', item.id, item.title)} className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-black">Wiederherstellen</button><button onClick={() => hardDelete('protocols', item, item.title)} className="text-[10px] uppercase tracking-widest font-bold bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2">Endgültig Löschen</button></div>
@@ -1866,12 +2060,12 @@ export default function AdminArea({ user, touren, onLogout }) {
                         ))}
 
                         {/* Empty States */}
-                        {((trashTab === 'touren' && touren.filter(t => t.isDeleted).length === 0) ||
-                          (trashTab === 'angebote' && angebote.filter(a => a.isDeleted).length === 0) ||
-                          (trashTab === 'team_profiles' && teamProfiles.filter(t => t.isDeleted).length === 0) ||
-                          (trashTab === 'docs' && docs.filter(d => d.isDeleted).length === 0) ||
-                          (trashTab === 'tasks' && tasks.filter(t => t.isDeleted).length === 0) ||
-                          (trashTab === 'protocols' && protocols.filter(p => p.isDeleted).length === 0)) && (
+                        {((trashTab === 'touren' && (touren || []).filter(t => t.isDeleted).length === 0) ||
+                          (trashTab === 'angebote' && (angebote || []).filter(a => a.isDeleted).length === 0) ||
+                          (trashTab === 'team_profiles' && (teamProfiles || []).filter(t => t.isDeleted).length === 0) ||
+                          (trashTab === 'docs' && (docs || []).filter(d => d.isDeleted).length === 0) ||
+                          (trashTab === 'tasks' && (tasks || []).filter(t => t.isDeleted).length === 0) ||
+                          (trashTab === 'protocols' && (protocols || []).filter(p => p.isDeleted).length === 0)) && (
                             <div className="p-12 text-center text-zinc-400 text-[10px] uppercase tracking-widest border border-dashed border-zinc-200">
                                 Dieser Papierkorb ist leer.
                             </div>
@@ -2042,6 +2236,12 @@ export default function AdminArea({ user, touren, onLogout }) {
                             <select value={editingTask.assignee || ''} onChange={e => setEditingTask({...editingTask, assignee: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-3 bg-white outline-none focus:border-black transition cursor-pointer"><option value="">-- Frei --</option>{teamMemberNames.map(a => <option key={a}>{a}</option>)}</select>
                         </div>
                     </div>
+
+                    <div className="pt-6 border-t border-zinc-100">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block mb-2">Fälligkeitsdatum / Deadline (Optional)</label>
+                        <input type="date" value={editingTask.dueDate || ''} onChange={e => setEditingTask({...editingTask, dueDate: e.target.value})} className="border border-zinc-300 p-3 text-sm outline-none focus:border-black transition w-full sm:w-auto" />
+                        <p className="text-xs text-zinc-400 mt-2">Wenn dieses Datum in weniger als 3 Tagen erreicht ist, erscheint eine Warnung auf dem Dashboard.</p>
+                    </div>
                     
                     <div className="pt-6 border-t border-zinc-100">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Dateianhang</label>
@@ -2056,121 +2256,6 @@ export default function AdminArea({ user, touren, onLogout }) {
                         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
                             <button type="button" onClick={() => setEditingTask(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition text-center">Abbrechen</button>
                             <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading ? 'Speichert...' : 'Aufgabe speichern'}</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-      )}
-
-      {editingDoc && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-5 md:p-10 w-full max-w-2xl shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl italic">{editingDoc.id ? 'Dokument bearbeiten' : 'Dokument(e) Upload'}</h3><button onClick={() => setEditingDoc(null)} className="hover:text-red-500 transition p-2"><X/></button></div>
-                <form onSubmit={saveDoc} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Ordner (Hauptkategorie)</label>
-                            <select name="category" value={editingDoc.category} onChange={e => setEditingDoc({...editingDoc, category: e.target.value, subcategory: ''})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-2 bg-white cursor-pointer outline-none focus:border-black transition">
-                                {docKategorien.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Unterkategorie (optional)</label>
-                            <select name="subcategory" value={editingDoc.subcategory || ''} onChange={e => setEditingDoc({...editingDoc, subcategory: e.target.value})} className="w-full border border-zinc-300 p-4 text-xs uppercase tracking-widest mt-2 bg-white cursor-pointer outline-none focus:border-black transition">
-                                <option value="">-- Keine --</option>
-                                {(docSubkategorien[editingDoc.category] || []).map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                    
-                    {!editingDoc.id ? (
-                        <>
-                            <div className="pt-4 border-t border-zinc-100">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex gap-4 items-center mb-4"><span className="flex items-center gap-2"><input type="radio" checked={!editingDoc.isLink} onChange={() => setEditingDoc({...editingDoc, isLink: false})} className="w-4 h-4 accent-black cursor-pointer"/> Dateiupload (Drag & Drop)</span><span className="flex items-center gap-2"><input type="radio" checked={editingDoc.isLink} onChange={() => setEditingDoc({...editingDoc, isLink: true})} className="w-4 h-4 accent-black cursor-pointer"/> Web-Link</span></label>
-                                
-                                {editingDoc.isLink ? (
-                                    <div className="space-y-4">
-                                        <input name="name" required placeholder="Name des Links" className="w-full border border-zinc-300 p-4 text-sm outline-none focus:border-black transition" />
-                                        <input name="url" type="url" required placeholder="https://..." className="w-full border border-zinc-300 p-4 text-sm outline-none focus:border-black transition" />
-                                    </div>
-                                ) : (
-                                    <div 
-                                        onDragOver={e => { e.preventDefault(); setDragActive(true); }}
-                                        onDragLeave={() => setDragActive(false)}
-                                        onDrop={e => { e.preventDefault(); setDragActive(false); setUploadFiles(Array.from(e.dataTransfer.files)); }}
-                                        className={`border-2 border-dashed p-6 md:p-10 text-center transition-colors ${dragActive ? 'border-black bg-zinc-100' : 'border-zinc-300 bg-zinc-50 hover:bg-zinc-100'}`}
-                                    >
-                                        <div className="flex flex-col items-center justify-center space-y-4 cursor-pointer relative">
-                                            <UploadCloud size={32} className="text-zinc-400" />
-                                            {uploadFiles.length > 0 ? (
-                                                <p className="text-sm font-bold text-black">{uploadFiles.length} Datei(en) ausgewählt:<br/><span className="text-xs font-normal text-zinc-500 mt-2 block break-all">{uploadFiles.map(f=>f.name).join(', ')}</span></p>
-                                            ) : (
-                                                <p className="text-xs text-zinc-500 uppercase tracking-widest leading-relaxed">Dateien hierhin ziehen oder<br className="md:hidden"/> auf das Feld tippen</p>
-                                            )}
-                                            <input type="file" multiple onChange={e => setUploadFiles(Array.from(e.target.files))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="pt-4 border-t border-zinc-100 space-y-4">
-                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Dateiname / Titel</label><input name="name" required value={editingDoc.name} onChange={e => setEditingDoc({...editingDoc, name: e.target.value})} className="w-full border-b border-zinc-300 p-3 outline-none mt-1 focus:border-black transition text-lg" /></div>
-                            {editingDoc.isLink && <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Web-Link URL</label><input name="url" type="url" required value={editingDoc.url} onChange={e => setEditingDoc({...editingDoc, url: e.target.value})} className="w-full border border-zinc-300 p-4 mt-2 text-sm outline-none focus:border-black transition" /></div>}
-                        </div>
-                    )}
-
-                    <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 gap-4">
-                        {editingDoc.id ? <button type="button" onClick={() => { softDelete('docs', editingDoc.id, editingDoc.name); setEditingDoc(null); }} className="text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline text-center w-full md:w-auto py-2">Löschen</button> : <div/>} 
-                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                            <button type="button" onClick={() => { setEditingDoc(null); setUploadFiles([]); }} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
-                            <button type="submit" disabled={isUploading || (!editingDoc.id && !editingDoc.isLink && uploadFiles.length === 0)} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl disabled:bg-zinc-300 text-center">{isUploading?'Lädt...':'Speichern'}</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-      )}
-      
-      {editingProtocol && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
-            <div className="bg-white p-5 md:p-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-                <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4"><h3 className="serif text-2xl md:text-3xl italic">{editingProtocol.id?'Eintrag bearbeiten':'Neuer Eintrag'}</h3><button onClick={() => setEditingProtocol(null)} className="hover:text-red-500 transition p-2"><X/></button></div>
-                <form onSubmit={(e) => { e.preventDefault(); saveProtocol(editingProtocol, e.target.file?.files[0]); }} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Titel / Thema</label><input required value={editingProtocol.title} onChange={e => setEditingProtocol({...editingProtocol, title: e.target.value})} className="w-full border-b border-zinc-300 p-3 mt-1 outline-none text-xl focus:border-black transition" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Datum</label><input type="date" value={editingProtocol.date} onChange={e => setEditingProtocol({...editingProtocol, date: e.target.value})} className="w-full border-b border-zinc-300 p-3 mt-1 outline-none text-lg focus:border-black transition" /></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Kategorie</label><select value={editingProtocol.category} onChange={e => setEditingProtocol({...editingProtocol, category: e.target.value})} className="w-full border border-zinc-300 p-4 mt-2 outline-none text-xs uppercase tracking-widest bg-white cursor-pointer focus:border-black transition">{protocolKategorien.map(c => <option key={c}>{c}</option>)}</select></div>
-                        <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Teilnehmer</label><input value={editingProtocol.participants || ''} onChange={e => setEditingProtocol({...editingProtocol, participants: e.target.value})} placeholder="Adrian, Jens..." className="w-full border border-zinc-300 p-4 mt-2 outline-none text-sm focus:border-black transition" /></div>
-                    </div>
-                    
-                    <div className="pt-4"><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Diskutierte Notizen / Details</label><textarea value={editingProtocol.notes || ''} onChange={e => setEditingProtocol({...editingProtocol, notes: e.target.value})} rows="6" className="w-full border border-zinc-300 p-4 md:p-5 mt-2 outline-none text-sm bg-zinc-50 focus:bg-white resize-y focus:border-black transition" /></div>
-                    
-                    <div className="pt-6 border-t border-zinc-200">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block mb-4">Beschlüsse & To-Dos aus dem Meeting</label>
-                        <div className="space-y-3">
-                            {editingProtocol.decisions.map((d, i) => (
-                                <div key={i} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-zinc-50 p-4 border border-zinc-200">
-                                    <div className="w-full sm:flex-1"><label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Beschluss / To-Do</label><input value={d.text} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].text = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} placeholder="Was wird gemacht?" className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition" /></div>
-                                    <div className="w-full sm:w-48 flex gap-2 items-end">
-                                        <div className="flex-1">
-                                            <label className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold block mb-1">Wer machts?</label>
-                                            <select value={d.assignee || ''} onChange={e => { const nd = [...editingProtocol.decisions]; nd[i].assignee = e.target.value; setEditingProtocol({...editingProtocol, decisions: nd}); }} className="w-full border border-zinc-300 p-3 text-sm outline-none focus:border-black transition bg-white"><option value="">Zuständig...</option>{teamMemberNames.map(m => <option key={m} value={m}>{m}</option>)}</select>
-                                        </div>
-                                        <button type="button" onClick={() => { const nd = [...editingProtocol.decisions]; nd.splice(i,1); setEditingProtocol({...editingProtocol, decisions: nd}); }} className="text-zinc-400 hover:text-red-500 p-3 transition bg-white border border-zinc-300 sm:border-0 sm:bg-transparent flex-shrink-0"><Trash2 size={18}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <button type="button" onClick={() => setEditingProtocol({...editingProtocol, decisions: [...editingProtocol.decisions, {text: '', assignee: ''}]})} className="mt-4 bg-zinc-100 text-black px-6 py-3 text-[9px] uppercase tracking-widest font-bold hover:bg-zinc-200 transition w-full sm:w-auto">+ Neuen Beschluss hinzufügen</button>
-                    </div>
-
-                    <div className="flex flex-col-reverse md:flex-row justify-between md:items-center pt-8 border-t border-zinc-200 mt-8 gap-4">
-                        {editingProtocol.id ? <button type="button" onClick={() => { softDelete('protocols', editingProtocol.id, editingProtocol.title); setEditingProtocol(null); }} className="w-full md:w-auto justify-center text-red-500 text-[10px] font-bold uppercase tracking-widest hover:underline flex items-center gap-2 py-2"><Trash2 size={14}/> Löschen</button> : <div/>} 
-                        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                            <button type="button" onClick={() => setEditingProtocol(null)} className="w-full md:w-auto border border-zinc-300 px-8 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition text-center">Abbrechen</button>
-                            <button type="submit" disabled={isUploading} className="w-full md:w-auto bg-black text-white px-10 py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition shadow-xl text-center">{isUploading?'Speichert...':'Speichern'}</button>
                         </div>
                     </div>
                 </form>

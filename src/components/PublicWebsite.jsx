@@ -391,7 +391,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 z-0 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}>
                         <span className="text-xs md:text-sm uppercase tracking-[0.4em] text-zinc-300 font-bold">Berg Kollektiv</span>
                     </div>
-                    {/* VIDEO WIRD NUN DYNAMISCH GELADEN */}
                     <video key={activeHeroVideo} autoPlay muted loop playsInline preload="auto" onCanPlay={() => setIsVideoLoaded(true)} onLoadedData={() => setIsVideoLoaded(true)} className={`absolute inset-0 w-full h-full object-cover grayscale transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-60' : 'opacity-0'}`}>
                         <source src={activeHeroVideo} type="video/mp4" />
                     </video>
@@ -887,7 +886,18 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 {(!selectedTour.isExample || selectedTour.date) && (
                                                     <Accordion title="Datum & Durchführung">
                                                         <div className="text-zinc-600 font-light text-sm pb-2">
-                                                            {selectedTour.date || 'Auf Anfrage'}
+                                                            <div className="flex items-center gap-2 mb-3">
+                                                                <span className="text-sm">{selectedTour.date || 'Auf Anfrage'}</span>
+                                                                {/* MIN TEILNEHMER BADGE */}
+                                                                {!selectedTour.isExample && selectedTour.minPlaetze > 0 && (
+                                                                    selectedTour.angemeldet >= selectedTour.minPlaetze ? (
+                                                                        <span className="text-[9px] bg-green-100 text-green-700 px-2 py-1 uppercase tracking-widest font-bold ml-2">Definitive Durchführung gesichert</span>
+                                                                    ) : (
+                                                                        <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 uppercase tracking-widest font-bold ml-2">Noch {selectedTour.minPlaetze - selectedTour.angemeldet} Anmeldung(en) nötig</span>
+                                                                    )
+                                                                )}
+                                                            </div>
+
                                                             {selectedTour.guide && (
                                                                 <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center gap-2">
                                                                     <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Voraussichtliche Leitung:</span>
