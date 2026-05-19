@@ -72,7 +72,7 @@ const compressVideo = (file, onProgress) => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // Anpassung: Bessere Video-Qualität für große Bildschirme (1080p statt 720p)
+            // 1080p (Full HD) und Ausrichtung beachten
             let targetWidth = 1920;
             let targetHeight = 1080;
             if (video.videoWidth < video.videoHeight) {
@@ -86,7 +86,7 @@ const compressVideo = (file, onProgress) => {
 
             const stream = canvas.captureStream(30);
             
-            // Anpassung: Höhere Bitrate (3.5 Mbps statt 1.5 Mbps) für sauberes Bild, Audio aus
+            // 3.5 Mbps Bitrate für saubere Qualität
             const recorder = new MediaRecorder(stream, { 
                 mimeType: 'video/webm;codecs=vp9',
                 videoBitsPerSecond: 3500000 
@@ -136,7 +136,6 @@ const getKat = (t, defaultCats) => {
 const getTech = (t) => t && t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t && t.ausdauer ? Number(t.ausdauer) : 2;
 
-// Wichtig: touren = [] als Fallback hinzugefügt
 export default function AdminArea({ user, touren = [], onLogout }) {
   const [adminSubView, setAdminSubView] = useState('dashboard');
   
@@ -162,7 +161,6 @@ export default function AdminArea({ user, touren = [], onLogout }) {
 
   const activeTeamAttributes = teamAttributes.length > 0 ? teamAttributes : ['Superkraft', 'Kryptonit', 'Touren-Snack', 'Lebensmotto'];
   
-  // Filter isDeleted = true aus, wenn es nicht der Papierkorb ist
   const activeAngebote = angebote.filter(a => !a.isDeleted);
   const activeAngeboteFallback = activeAngebote.length > 0 ? activeAngebote : DEFAULT_ANGEBOTE;
   const tourKategorien = [...new Set(activeAngeboteFallback.map(a => a.title))];
@@ -1219,7 +1217,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                         <div className="space-y-4 fade-in">
                             <p className="text-sm text-zinc-500 mb-8">Verwalte hier die Personen in eurem Team. Sichtbare Profile erscheinen im "Kollektiv" auf der Webseite.</p>
                             
-                            {(teamProfiles || []).filter(t => !t.isDeleted).map(member => (
+                            {teamProfiles.filter(t => !t.isDeleted).map(member => (
                                 <div key={member.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
                                     <div className="flex items-center gap-6">
                                         <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-100 flex-shrink-0">
@@ -1239,7 +1237,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                     </div>
                                 </div>
                             ))}
-                            {(teamProfiles || []).filter(t => !t.isDeleted).length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine aktiven Teammitglieder.</p>}
+                            {teamProfiles.filter(t => !t.isDeleted).length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine aktiven Teammitglieder.</p>}
                         </div>
                     )}
                 </div>
@@ -1688,7 +1686,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Materialliste (PDF) verknüpfen</label>
                                     <select name="material_list_id" defaultValue={editingTour.materialListId || ''} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
                                         <option value="">-- Keine Liste verknüpft --</option>
-                                        {(materialLists || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                        {materialLists.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                     </select>
                                 </div>
                             </div>

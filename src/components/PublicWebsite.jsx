@@ -391,6 +391,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 z-0 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}>
                         <span className="text-xs md:text-sm uppercase tracking-[0.4em] text-zinc-300 font-bold">Berg Kollektiv</span>
                     </div>
+                    {/* VIDEO WIRD NUN DYNAMISCH GELADEN */}
                     <video key={activeHeroVideo} autoPlay muted loop playsInline preload="auto" onCanPlay={() => setIsVideoLoaded(true)} onLoadedData={() => setIsVideoLoaded(true)} className={`absolute inset-0 w-full h-full object-cover grayscale transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-60' : 'opacity-0'}`}>
                         <source src={activeHeroVideo} type="video/mp4" />
                     </video>
@@ -648,13 +649,17 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     </div>
                     
                     <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
-                        <div className="max-w-7xl mx-auto flex flex-wrap gap-4 items-center">
-                            <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mr-4">Filter:</span>
-                            {['Alle', ...tourKategorien].map(kat => (
-                                <button key={kat} onClick={() => setFilterKategorie(kat)} className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors font-bold ${filterKategorie === kat ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'}`}>
-                                    {kat}
-                                </button>
-                            ))}
+                        <div className="max-w-7xl mx-auto">
+                            <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
+                                <div className="flex items-center gap-3 w-full sm:w-auto">
+                                    <Filter size={16} className="text-zinc-400" />
+                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
+                                    <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                        <option value="Alle">Alle Kategorien</option>
+                                        {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -738,7 +743,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
                                             <button onClick={() => { 
                                                 setSelectedAngebot(null); 
-                                                setFilterKategorie(selectedAngebot.title.includes('Klett') ? 'Klettern' : (selectedAngebot.title.includes('Hoch') ? 'Hochtour' : (selectedAngebot.title.includes('Ski') ? 'Skitour' : 'Alle')));
+                                                setFilterKategorie('Alle');
                                                 setIsIdeenBoardOpen(true); 
                                             }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
                                                 Zu den Touren-Ideen
@@ -886,14 +891,14 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 {(!selectedTour.isExample || selectedTour.date) && (
                                                     <Accordion title="Datum & Durchführung">
                                                         <div className="text-zinc-600 font-light text-sm pb-2">
-                                                            <div className="flex items-center gap-2 mb-3">
+                                                            <div className="flex items-center gap-2 mb-3 flex-wrap">
                                                                 <span className="text-sm">{selectedTour.date || 'Auf Anfrage'}</span>
                                                                 {/* MIN TEILNEHMER BADGE */}
                                                                 {!selectedTour.isExample && selectedTour.minPlaetze > 0 && (
                                                                     selectedTour.angemeldet >= selectedTour.minPlaetze ? (
-                                                                        <span className="text-[9px] bg-green-100 text-green-700 px-2 py-1 uppercase tracking-widest font-bold ml-2">Definitive Durchführung gesichert</span>
+                                                                        <span className="text-[9px] bg-green-100 text-green-700 px-2 py-1 uppercase tracking-widest font-bold ml-2 block sm:inline-block mt-2 sm:mt-0">Definitive Durchführung gesichert</span>
                                                                     ) : (
-                                                                        <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 uppercase tracking-widest font-bold ml-2">Noch {selectedTour.minPlaetze - selectedTour.angemeldet} Anmeldung(en) nötig</span>
+                                                                        <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 uppercase tracking-widest font-bold ml-2 block sm:inline-block mt-2 sm:mt-0">Noch {selectedTour.minPlaetze - selectedTour.angemeldet} Anmeldung(en) bis Minimum Teilnehmerzahl erreicht.</span>
                                                                     )
                                                                 )}
                                                             </div>
