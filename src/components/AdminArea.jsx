@@ -72,11 +72,12 @@ const compressVideo = (file, onProgress) => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            let targetWidth = 1280;
-            let targetHeight = 720;
+            // Anpassung: Bessere Video-Qualität für große Bildschirme (1080p statt 720p)
+            let targetWidth = 1920;
+            let targetHeight = 1080;
             if (video.videoWidth < video.videoHeight) {
-                targetWidth = 720;
-                targetHeight = 1280;
+                targetWidth = 1080;
+                targetHeight = 1920;
             }
             canvas.width = targetWidth;
             canvas.height = targetHeight;
@@ -85,9 +86,10 @@ const compressVideo = (file, onProgress) => {
 
             const stream = canvas.captureStream(30);
             
+            // Anpassung: Höhere Bitrate (3.5 Mbps statt 1.5 Mbps) für sauberes Bild, Audio aus
             const recorder = new MediaRecorder(stream, { 
                 mimeType: 'video/webm;codecs=vp9',
-                videoBitsPerSecond: 1500000 
+                videoBitsPerSecond: 3500000 
             });
             
             const chunks = [];
@@ -636,7 +638,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
             kategorie: fd.get('kategorie') || tourKategorien[0] || 'Hochtour',
             technik: parseInt(fd.get('technik')) || 2,
             ausdauer: parseInt(fd.get('ausdauer')) || 2,
-            minPlaetze: parseInt(fd.get('minPlaetze')) || 1, // NEU: Min. Plätze speichern
+            minPlaetze: parseInt(fd.get('minPlaetze')) || 1,
             maxPlaetze: parseInt(fd.get('maxPlaetze')) || 4,
             image: combinedImages[0] || '/hochtour.jpg', 
             images: combinedImages, 
@@ -919,17 +921,17 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                 )}
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Offene Aufgaben</p><p className="serif text-3xl italic">{tasks.filter(t => t.status !== 'Erledigt' && !t.isDeleted).length}</p></div>
-                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Neue Anfragen</p><p className="serif text-3xl italic">{anfragen.filter(a => (!a.status || a.status === 'Neu / Offen') && !a.isDeleted).length}</p></div>
-                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Total Anmeldungen</p><p className="serif text-3xl italic">{anmeldungen.length}</p></div>
-                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Kontakte im CRM</p><p className="serif text-3xl italic">{kundenStamm.length}</p></div>
+                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Offene Aufgaben</p><p className="serif text-3xl italic">{(tasks || []).filter(t => t.status !== 'Erledigt' && !t.isDeleted).length}</p></div>
+                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Neue Anfragen</p><p className="serif text-3xl italic">{(anfragen || []).filter(a => (!a.status || a.status === 'Neu / Offen') && !a.isDeleted).length}</p></div>
+                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Total Anmeldungen</p><p className="serif text-3xl italic">{(anmeldungen || []).length}</p></div>
+                  <div className="p-6 bg-zinc-50 border border-zinc-100"><p className="text-[8px] uppercase tracking-widest text-zinc-400 mb-2">Kontakte im CRM</p><p className="serif text-3xl italic">{(kundenStamm || []).length}</p></div>
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-12 pt-8">
                     <div>
                         <h3 className="serif text-2xl italic mb-6">Letzte Anmeldungen</h3>
                         <div className="space-y-3">
-                            {anmeldungen.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)).slice(0, 8).map(anm => (
+                            {(anmeldungen || []).sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)).slice(0, 8).map(anm => (
                                 <div key={anm.id} className="p-4 bg-zinc-50 border border-zinc-100">
                                     <div className="flex justify-between items-start">
                                         <p className="font-bold text-sm uppercase tracking-widest">{anm.vorname} {anm.name}</p>
@@ -938,14 +940,14 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                     <p className="text-xs text-zinc-500 mt-2">Am {anm.timestamp ? new Date(anm.timestamp.seconds * 1000).toLocaleDateString('de-CH') : 'Kürzlich'}</p>
                                 </div>
                             ))}
-                            {anmeldungen.length === 0 && <p className="text-sm text-zinc-400 italic">Noch keine Buchungen eingegangen.</p>}
+                            {(anmeldungen || []).length === 0 && <p className="text-sm text-zinc-400 italic">Noch keine Buchungen eingegangen.</p>}
                         </div>
                     </div>
 
                     <div>
                         <h3 className="serif text-2xl italic mb-6">System Journal <span className="text-[10px] font-normal uppercase tracking-widest text-zinc-400 ml-2">(Wer macht was)</span></h3>
                         <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                            {logs.slice(0, 30).map(log => (
+                            {(logs || []).slice(0, 30).map(log => (
                                 <div key={log.id} className="p-4 bg-zinc-50 border border-zinc-100 flex flex-col gap-2">
                                     <p className="text-sm font-bold">{log.action}</p>
                                     <div className="flex justify-between items-center text-[9px] uppercase tracking-widest text-zinc-400">
@@ -954,7 +956,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                     </div>
                                 </div>
                             ))}
-                            {logs.length === 0 && <p className="text-sm text-zinc-400 italic">Noch keine System-Ereignisse protokolliert.</p>}
+                            {(logs || []).length === 0 && <p className="text-sm text-zinc-400 italic">Noch keine System-Ereignisse protokolliert.</p>}
                         </div>
                     </div>
                 </div>
@@ -1217,7 +1219,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                         <div className="space-y-4 fade-in">
                             <p className="text-sm text-zinc-500 mb-8">Verwalte hier die Personen in eurem Team. Sichtbare Profile erscheinen im "Kollektiv" auf der Webseite.</p>
                             
-                            {teamProfiles.filter(t => !t.isDeleted).map(member => (
+                            {(teamProfiles || []).filter(t => !t.isDeleted).map(member => (
                                 <div key={member.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
                                     <div className="flex items-center gap-6">
                                         <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-100 flex-shrink-0">
@@ -1237,7 +1239,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                     </div>
                                 </div>
                             ))}
-                            {teamProfiles.filter(t => !t.isDeleted).length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine aktiven Teammitglieder.</p>}
+                            {(teamProfiles || []).filter(t => !t.isDeleted).length === 0 && <p className="text-center p-12 text-sm text-zinc-400 uppercase tracking-widest border border-dashed border-zinc-300">Noch keine aktiven Teammitglieder.</p>}
                         </div>
                     )}
                 </div>
@@ -1269,7 +1271,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                         </div>
                         <div className="md:col-span-7 lg:col-span-8">
                             <div className="space-y-3">
-                                {materialLists.map(list => (
+                                {(materialLists || []).map(list => (
                                     <div key={list.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-4 md:p-5 border border-zinc-200 bg-white hover:border-black transition group">
                                         <div className="flex items-center gap-4">
                                             <div className="p-3 bg-zinc-100 text-zinc-400 rounded-sm flex-shrink-0"><FileText size={20}/></div>
@@ -1686,7 +1688,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Materialliste (PDF) verknüpfen</label>
                                     <select name="material_list_id" defaultValue={editingTour.materialListId || ''} className="w-full border border-zinc-300 p-3 text-sm mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
                                         <option value="">-- Keine Liste verknüpft --</option>
-                                        {materialLists.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                        {(materialLists || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                     </select>
                                 </div>
                             </div>
@@ -1938,7 +1940,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                             <div className="col-span-2 text-right">Aktionen</div>
                         </div>
                         <div className="divide-y divide-zinc-100">
-                            {docs.filter(d => !d.isDeleted && (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).map(d => (
+                            {(docs || []).filter(d => !d.isDeleted && (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).map(d => (
                                 <div key={d.id} className="flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 p-5 hover:bg-zinc-50 transition group">
                                     <div className="col-span-6 flex gap-4 items-start md:items-center">
                                         <div className="p-3 bg-zinc-100 text-zinc-400 rounded-sm hidden sm:block flex-shrink-0"><FileText size={20}/></div>
@@ -1961,7 +1963,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                     </div>
                                 </div>
                             ))}
-                            {docs.filter(d => !d.isDeleted && (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).length === 0 && <div className="p-12 text-center text-zinc-400 text-sm uppercase tracking-widest">Keine Dokumente in dieser Ansicht.</div>}
+                            {(docs || []).filter(d => !d.isDeleted && (docFilter === 'Alle' || d.category === docFilter) && (docSubFilter === 'Alle' || d.subcategory === docSubFilter || docFilter === 'Alle')).length === 0 && <div className="p-12 text-center text-zinc-400 text-sm uppercase tracking-widest">Keine Dokumente in dieser Ansicht.</div>}
                         </div>
                     </div>
                 </div>
@@ -1980,7 +1982,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                         {['Alle', ...protocolKategorien].map(c => <button key={c} onClick={() => setProtocolFilter(c)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition border-b-2 ${protocolFilter === c ? 'border-black text-black' : 'border-transparent text-zinc-400 hover:text-black'}`}>{c}</button>)}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {protocols.filter(p => !p.isDeleted && (protocolFilter === 'Alle' || p.category === protocolFilter)).map(p => (
+                        {(protocols || []).filter(p => !p.isDeleted && (protocolFilter === 'Alle' || p.category === protocolFilter)).map(p => (
                             <div key={p.id} className="border border-zinc-200 p-6 md:p-8 hover:border-black transition bg-white flex flex-col justify-between group">
                                 <div>
                                     <div className="flex justify-between items-start mb-6">
@@ -1994,7 +1996,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                 </div>
                             </div>
                         ))}
-                        {protocols.filter(p => !p.isDeleted && (protocolFilter === 'Alle' || p.category === protocolFilter)).length === 0 && <div className="col-span-full text-center p-12 border border-dashed border-zinc-300 text-zinc-400 uppercase tracking-widest text-sm">Noch keine Einträge in dieser Kategorie.</div>}
+                        {(protocols || []).filter(p => !p.isDeleted && (protocolFilter === 'Alle' || p.category === protocolFilter)).length === 0 && <div className="col-span-full text-center p-12 border border-dashed border-zinc-300 text-zinc-400 uppercase tracking-widest text-sm">Noch keine Einträge in dieser Kategorie.</div>}
                     </div>
                 </div>
             )}
