@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp, onSnapshot, setDoc } from "firebase/firestore";
-import { FileText, Tag, Filter, Search, Info, Hand } from 'lucide-react';
+import { FileText, Tag, Filter, Search, Info, Hand, X, ChevronLeft, ChevronRight, Mail, ArrowRight } from 'lucide-react';
 
 // ==========================================
 // FIREBASE KONFIGURATION
@@ -100,7 +100,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [teamAttributes, setTeamAttributes] = useState([]);
     const [angebote, setAngebote] = useState([]);
     
-    // Vereinte Deklaration von websiteSettings
+    // Settings
     const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [], categoryOrder: [], tabOrder: ['Sommer', 'Winter', 'Spontantouren'] });
     const [angebotTab, setAngebotTab] = useState('Sommer');
 
@@ -263,7 +263,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         const data = {
             thema: thema,
             vorname, name, email,
-            nachricht: fd.get('nachricht'), timestamp: serverTimestamp()
+            nachricht: fd.get('nachricht'), timestamp: serverTimestamp(),
+            status: 'Neu / Offen'
         };
 
         try {
@@ -290,6 +291,16 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
         try {
             await saveCustomerData(email, { email: email.toLowerCase().trim(), vorname, name, newsletter: true });
+            
+            const anfrageData = {
+                thema: 'Newsletter & Spontantouren Anmeldung',
+                vorname, name, email,
+                nachricht: 'Kunde möchte für den Newsletter bzw. für Spontantouren eingeschrieben werden.',
+                timestamp: serverTimestamp(),
+                status: 'Geantwortet'
+            };
+            await addDoc(collection(db, 'anfragen'), anfrageData);
+
             setBookingStatus("Erfolgreich für News & Spontantouren eingetragen!");
             setTimeout(() => { setSelectedAngebot(null); setBookingStatus(null); setIsSubmitting(false); }, 3000);
         } catch(err) {
@@ -311,7 +322,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         const data = {
             thema: `Idee: ${selectedTour.title}`,
             vorname, name, email,
-            nachricht: fd.get('nachricht'), timestamp: serverTimestamp()
+            nachricht: fd.get('nachricht'), timestamp: serverTimestamp(),
+            status: 'Neu / Offen'
         };
 
         try {
@@ -526,22 +538,21 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     </div>
                 </section>
 
-                <section id="kollektiv" className="py-40 px-6 bg-white">
+                <section id="kollektiv" className="py-32 px-6 bg-white">
                     <div className="max-w-7xl mx-auto">
-                        <div className="text-center mb-24"><h2 className="serif text-4xl italic">Das Kollektiv</h2></div>
-                        <div className="grid md:grid-cols-3 gap-16 md:gap-8 lg:gap-16">
-                            {visibleTeamProfiles.map((member, i) => (
-                                <div key={member.id || i} onClick={() => setSelectedTeamMember(member)} className="text-center flex flex-col items-center group cursor-pointer">
-                                    <div className="team-img-container aspect-[4/5] w-full bg-zinc-100 mb-10 overflow-hidden relative">
-                                        <img src={(member.images || [member.image])[0] || '/adrian.jpg'} alt={member.name} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
+                        <div className="text-center mb-20">
+                            <h2 className="serif text-4xl italic mb-6">Das Kollektiv</h2>
+                            <p className="text-sm text-zinc-500 uppercase tracking-widest">Die Gesichter hinter den Touren</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+                            {visibleTeamProfiles.map(member => (
+                                <div key={member.id} className="group cursor-pointer" onClick={() => setSelectedTeamMember(member)}>
+                                    <div className="team-img-container aspect-[3/4] overflow-hidden bg-zinc-100 mb-6 grayscale group-hover:grayscale-0 transition-all duration-1000">
+                                        <img src={(member.images || [member.image])[0]} className="w-full h-full object-cover transform transition-transform duration-1000 group-hover:scale-105" alt={member.name} />
                                     </div>
-                                    <div className="space-y-4 max-w-[280px]">
-                                        <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] group-hover:text-zinc-500 transition-colors">{member.name}</h3>
-                                        <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 font-medium">{member.title}</p>
-                                        <div className="h-px w-8 bg-zinc-200 mx-auto my-6"></div>
-                                        <div className="pt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <span className="text-[8px] uppercase tracking-widest text-zinc-400 border-b border-zinc-200 pb-1">Steckbrief ansehen</span>
-                                        </div>
+                                    <div className="text-center">
+                                        <h3 className="text-xl font-light mb-2 uppercase tracking-widest">{member.name}</h3>
+                                        <p className="text-[10px] text-zinc-400 uppercase tracking-[0.2em]">{member.title}</p>
                                     </div>
                                 </div>
                             ))}
@@ -549,396 +560,505 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     </div>
                 </section>
 
-                <footer id="kontakt" className="py-32 md:py-48 bg-[#f9f9f7] border-t border-zinc-100 px-6">
-                    <div className="max-w-7xl mx-auto flex flex-col items-center">
-                        <p className="uppercase tracking-[0.5em] text-[10px] mb-12 opacity-50 text-center">Kontaktiere uns</p>
-                        <a href="mailto:hallo@bergkollektiv.ch" className="serif text-3xl md:text-6xl italic hover:text-zinc-400 transition-colors duration-500 block text-center mb-20">hallo@bergkollektiv.ch</a>
-                        <div className="w-full grid md:grid-cols-3 gap-12 items-center">
-                            <div className="flex flex-col items-center md:items-start space-y-6">
-                                <a href="https://www.instagram.com/" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
-                                    <Instagram size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Instagram</span>
-                                </a>
-                                <a href="/agb.pdf" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
-                                    <FileText size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Allgemeine Geschäftsbedingungen</span>
-                                </a>
-                                <a href="/tarife.pdf" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
-                                    <Tag size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Allgemeine Tarife</span>
-                                </a>
-                            </div>
-                            <div className="flex flex-col items-center space-y-4">
-                                <img src="/Logo IVBV negativ.svg" alt="IVBV Logo" loading="lazy" decoding="async" className="h-20 w-auto object-contain grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-500" />
-                                <p className="text-[8px] uppercase tracking-[0.3em] text-zinc-400 text-center">Internationaler Verband der<br/>Bergführervereinigungen</p>
-                            </div>
-                            <div className="flex flex-col items-center md:items-end text-center md:text-right space-y-2">
-                                <div className="text-lg tracking-[0.3em] uppercase mb-4">BERG <span className="font-bold">KOLLEKTIV</span></div>
-                                <p className="text-[8px] uppercase tracking-widest text-zinc-400">&copy; 2026 Berg Kollektiv<br/>Alle Rechte vorbehalten.</p>
-                                <button onClick={() => { onGoToAdmin && onGoToAdmin(); window.scrollTo(0,0); }} className="mt-6 text-[8px] uppercase tracking-[0.2em] text-zinc-300 hover:text-black transition-colors md:hidden">— Admin Login —</button>
-                            </div>
+                <section id="kontakt" className="py-32 px-6 bg-[#f9f9f7]">
+                    <div className="max-w-4xl mx-auto text-center">
+                        <h2 className="serif text-4xl italic mb-12">Lass uns reden</h2>
+                        <a href="mailto:hallo@bergkollektiv.ch" className="text-2xl md:text-4xl font-light hover:text-zinc-500 transition-colors border-b border-transparent hover:border-zinc-300 pb-2">hallo@bergkollektiv.ch</a>
+                        <div className="mt-20 flex justify-center gap-8">
+                            <a href="#" className="p-4 border border-zinc-200 rounded-full hover:bg-black hover:text-white transition-all"><Instagram /></a>
+                        </div>
+                    </div>
+                </section>
+
+                <footer className="py-12 px-6 bg-black text-white text-center text-[10px] uppercase tracking-widest">
+                    <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+                        <p>&copy; {new Date().getFullYear()} Berg Kollektiv. Alle Rechte vorbehalten.</p>
+                        <div className="flex gap-6">
+                            <a href="#" className="hover:text-zinc-400 transition-colors">Impressum</a>
+                            <a href="#" className="hover:text-zinc-400 transition-colors">AGB</a>
+                            <a href="#" className="hover:text-zinc-400 transition-colors">Datenschutz</a>
                         </div>
                     </div>
                 </footer>
+
             </main>
 
-            {/* =========================================
-                MODAL: ALLE TOUREN & FILTER 
-               ========================================= */}
+            {/* --- MODALS (Tourenliste, Ideenboard, Detailansichten) --- */}
+            
+            {/* Alle Touren Modal */}
             {isAllToursModalOpen && (
-                <div className="fixed inset-0 z-[150] flex flex-col bg-[#f9f9f7] overflow-y-auto fade-in">
-                    
-                    <div className="p-6 md:px-12 md:py-8 flex justify-between items-center bg-white border-b border-zinc-200 sticky top-0 z-20">
-                        <h2 className="serif text-3xl md:text-4xl italic">Tourenübersicht</h2>
-                        <button onClick={() => setIsAllToursModalOpen(false)} className="w-12 h-12 flex items-center justify-center bg-zinc-100 hover:bg-black hover:text-white rounded-full transition-colors text-2xl">&times;</button>
+                <div className="fixed inset-0 z-[100] bg-white overflow-y-auto fade-in">
+                    <div className="sticky top-0 bg-white/90 backdrop-blur-md z-10 border-b border-zinc-100 px-6 py-6 md:px-12 flex justify-between items-center">
+                        <h2 className="serif text-2xl md:text-3xl italic">Alle Touren</h2>
+                        <button onClick={() => setIsAllToursModalOpen(false)} className="text-black hover:opacity-50 transition p-2"><X size={28} strokeWidth={1} /></button>
                     </div>
-                    
-                    <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
-                        <div className="max-w-7xl mx-auto">
-                            <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
-                                <div className="flex flex-col sm:flex-row gap-6">
-                                    <div className="flex items-center gap-3">
-                                        <Filter size={16} className="text-zinc-400" />
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
-                                        <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                            <option value="Alle">Alle Kategorien</option>
-                                            {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
-                                        <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                            <option value="Alle">Alle Level</option>
-                                            <option value="1">1 - Einfach</option>
-                                            <option value="2">2 - Mittel</option>
-                                            <option value="3">3 - Schwer</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
-                                        <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                            <option value="Alle">Alle Level</option>
-                                            <option value="1">1 - Einfach</option>
-                                            <option value="2">2 - Mittel</option>
-                                            <option value="3">3 - Schwer</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                
-                                <button 
-                                    onClick={() => setShowLevelInfo(!showLevelInfo)} 
-                                    className={`flex items-center gap-2 px-4 py-2 border transition-colors text-[10px] uppercase tracking-widest font-bold ${showLevelInfo ? 'bg-black text-white border-black' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100 hover:text-black'}`}
-                                >
-                                    <Info size={14} /> Info Technik & Ausdauer
-                                </button>
+
+                    <div className="px-6 md:px-12 py-8 max-w-7xl mx-auto flex flex-col md:flex-row gap-8 items-start">
+                        <div className="w-full md:w-64 flex-shrink-0 sticky top-32">
+                            <div className="flex items-center gap-2 mb-6 font-bold uppercase tracking-widest text-[11px] text-black border-b border-zinc-200 pb-3">
+                                <Filter size={14}/> Filter
                             </div>
                             
-                            {showLevelInfo && (
-                                <div className="mt-6 p-6 md:p-8 bg-[#f9f9f7] border border-zinc-200 text-xs font-light leading-relaxed relative fade-in">
-                                    <button onClick={() => setShowLevelInfo(false)} className="absolute top-4 right-4 text-2xl text-zinc-400 hover:text-black leading-none">&times;</button>
-                                    <div className="grid md:grid-cols-2 gap-8">
-                                        <div>
-                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-black mb-4 border-b border-zinc-200 pb-2">Level Technik</h4>
-                                            <ul className="space-y-3 text-zinc-600">
-                                                <li><span className="font-bold text-black">Level 1:</span> {techDetails[1]}</li>
-                                                <li><span className="font-bold text-black">Level 2:</span> {techDetails[2]}</li>
-                                                <li><span className="font-bold text-black">Level 3:</span> {techDetails[3]}</li>
-                                            </ul>
-                                        </div>
-                                        <div>
-                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-black mb-4 border-b border-zinc-200 pb-2">Level Ausdauer</h4>
-                                            <ul className="space-y-3 text-zinc-600">
-                                                <li><span className="font-bold text-black">Level 1:</span> {ausdDetails[1]}</li>
-                                                <li><span className="font-bold text-black">Level 2:</span> {ausdDetails[2]}</li>
-                                                <li><span className="font-bold text-black">Level 3:</span> {ausdDetails[3]}</li>
-                                            </ul>
-                                        </div>
+                            <div className="space-y-6">
+                                <div>
+                                    <h4 className="text-[9px] uppercase tracking-widest text-zinc-400 mb-3 font-bold">Kategorie</h4>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="flex items-center gap-3 text-sm cursor-pointer group">
+                                            <input type="radio" checked={filterKategorie === 'Alle'} onChange={() => setFilterKategorie('Alle')} className="accent-black w-3 h-3" />
+                                            <span className="group-hover:text-black text-zinc-600 transition">Alle Kategorien</span>
+                                        </label>
+                                        {tourKategorien.map(kat => (
+                                            <label key={kat} className="flex items-center gap-3 text-sm cursor-pointer group">
+                                                <input type="radio" checked={filterKategorie === kat} onChange={() => setFilterKategorie(kat)} className="accent-black w-3 h-3" />
+                                                <span className="group-hover:text-black text-zinc-600 transition">{kat}</span>
+                                            </label>
+                                        ))}
                                     </div>
                                 </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="p-6 md:p-12 max-w-7xl mx-auto w-full">
-                        {filteredTours.length > 0 ? (
-                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
-                                {filteredTours.map(tour => (
-                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
-                                        <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
-                                            <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
-                                            <div className="absolute top-4 right-4 bg-white/95 px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
-                                                {tour.maxPlaetze - tour.angemeldet > 0 ? `${tour.maxPlaetze - tour.angemeldet} Plätze` : 'Voll'}
-                                            </div>
-                                            <div className="absolute top-4 left-4 bg-black text-white px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
-                                                {getKat(tour, tourKategorien)}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{tour.date}</p>
-                                            <h3 className="text-xl font-medium mb-4 uppercase">{tour.title}</h3>
-                                            <div className="flex justify-between items-end border-t border-zinc-100 pt-4 mt-4">
-                                                <p className="text-zinc-700 text-sm font-bold pb-1">{tour.price}</p>
-                                                <div className="flex flex-col gap-1.5 items-end">
-                                                    <DifficultyDots label="Technik" level={getTech(tour)} />
-                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
-                                                </div>
-                                            </div>
-                                        </div>
+                                <div className="border-t border-zinc-100 pt-6">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h4 className="text-[9px] uppercase tracking-widest text-zinc-400 font-bold">Technik</h4>
+                                        <button onClick={() => setShowLevelInfo(!showLevelInfo)} className="text-zinc-400 hover:text-black transition"><Info size={12}/></button>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-center py-32 text-zinc-400">
-                                <Filter size={48} className="mx-auto mb-6 opacity-20" />
-                                <p className="text-lg uppercase tracking-widest">Keine Touren für diese Filterkombination gefunden.</p>
-                                <button onClick={() => { setFilterKategorie('Alle'); setFilterTechnik('Alle'); setFilterAusdauer('Alle'); }} className="mt-8 border-b border-black text-black text-[10px] uppercase tracking-widest pb-1 hover:text-zinc-500 transition-colors">Filter zurücksetzen</button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* =========================================
-                MODAL IDEEN-BOARD (Beispieltouren)
-               ========================================= */}
-            {isIdeenBoardOpen && (
-                <div className="fixed inset-0 z-[150] flex flex-col bg-[#f9f9f7] overflow-y-auto fade-in">
-                    <div className="p-6 md:px-12 md:py-8 flex justify-between items-center bg-white border-b border-zinc-200 sticky top-0 z-20">
-                        <h2 className="serif text-3xl md:text-4xl italic">Touren Ideen & Inspiration</h2>
-                        <button onClick={() => setIsIdeenBoardOpen(false)} className="w-12 h-12 flex items-center justify-center bg-zinc-100 hover:bg-black hover:text-white rounded-full transition-colors text-2xl">&times;</button>
-                    </div>
-                    
-                    <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
-                        <div className="max-w-7xl mx-auto">
-                            <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
-                                <div className="flex flex-col sm:flex-row gap-6 w-full">
-                                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                                        <Filter size={16} className="text-zinc-400 flex-shrink-0" />
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
-                                        <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                            <option value="Alle">Alle Kategorien</option>
-                                            {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
-                                        <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                            <option value="Alle">Alle Level</option>
-                                            <option value="1">1 - Einfach</option>
-                                            <option value="2">2 - Mittel</option>
-                                            <option value="3">3 - Schwer</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
-                                        <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                            <option value="Alle">Alle Level</option>
-                                            <option value="1">1 - Einfach</option>
-                                            <option value="2">2 - Mittel</option>
-                                            <option value="3">3 - Schwer</option>
-                                        </select>
+                                    <div className="flex gap-2">
+                                        {['Alle', '1', '2', '3'].map(lvl => (
+                                            <button key={lvl} onClick={() => setFilterTechnik(lvl)} className={`flex-1 py-1.5 text-xs font-bold border transition ${filterTechnik === lvl ? 'border-black bg-black text-white' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400'}`}>{lvl}</button>
+                                        ))}
                                     </div>
                                 </div>
-                                
-                                <button 
-                                    onClick={() => setShowLevelInfo(!showLevelInfo)} 
-                                    className={`flex items-center gap-2 px-4 py-2 border transition-colors text-[10px] uppercase tracking-widest font-bold w-full lg:w-auto justify-center mt-4 lg:mt-0 ${showLevelInfo ? 'bg-black text-white border-black' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100 hover:text-black'}`}
-                                >
-                                    <Info size={14} /> Info Technik & Ausdauer
-                                </button>
-                            </div>
-
-                            {showLevelInfo && (
-                                <div className="mt-6 p-6 md:p-8 bg-[#f9f9f7] border border-zinc-200 text-xs font-light leading-relaxed relative fade-in">
-                                    <button onClick={() => setShowLevelInfo(false)} className="absolute top-4 right-4 text-2xl text-zinc-400 hover:text-black leading-none">&times;</button>
-                                    <div className="grid md:grid-cols-2 gap-8">
-                                        <div>
-                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-black mb-4 border-b border-zinc-200 pb-2">Level Technik</h4>
-                                            <ul className="space-y-3 text-zinc-600">
-                                                <li><span className="font-bold text-black">Level 1:</span> {techDetails[1]}</li>
-                                                <li><span className="font-bold text-black">Level 2:</span> {techDetails[2]}</li>
-                                                <li><span className="font-bold text-black">Level 3:</span> {techDetails[3]}</li>
-                                            </ul>
-                                        </div>
-                                        <div>
-                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-black mb-4 border-b border-zinc-200 pb-2">Level Ausdauer</h4>
-                                            <ul className="space-y-3 text-zinc-600">
-                                                <li><span className="font-bold text-black">Level 1:</span> {ausdDetails[1]}</li>
-                                                <li><span className="font-bold text-black">Level 2:</span> {ausdDetails[2]}</li>
-                                                <li><span className="font-bold text-black">Level 3:</span> {ausdDetails[3]}</li>
-                                            </ul>
-                                        </div>
+                                <div className="border-t border-zinc-100 pt-6">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h4 className="text-[9px] uppercase tracking-widest text-zinc-400 font-bold">Ausdauer</h4>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        {['Alle', '1', '2', '3'].map(lvl => (
+                                            <button key={lvl} onClick={() => setFilterAusdauer(lvl)} className={`flex-1 py-1.5 text-xs font-bold border transition ${filterAusdauer === lvl ? 'border-black bg-black text-white' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400'}`}>{lvl}</button>
+                                        ))}
                                     </div>
                                 </div>
-                            )}
-                        </div>
-                    </div>
 
-                    <div className="p-6 md:p-12 max-w-7xl mx-auto w-full">
-                        {filteredExampleTours.length > 0 ? (
-                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
-                                {filteredExampleTours.map(tour => (
-                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
-                                        <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
-                                            <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
-                                            <div className="absolute top-4 left-4 bg-black text-white px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
-                                                {getKat(tour, tourKategorien)}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-medium mb-4 uppercase">{tour.title}</h3>
-                                            <div className="flex justify-end items-end border-t border-zinc-100 pt-4 mt-4">
-                                                <div className="flex flex-col gap-1.5 items-end">
-                                                    <DifficultyDots label="Technik" level={getTech(tour)} />
-                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-center py-32 text-zinc-400">
-                                <p className="text-lg uppercase tracking-widest">Keine Ideen für diese Kategorie gefunden.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* =========================================
-                MODAL FÜR ANGEBOTE
-               ========================================= */}
-            {selectedAngebot && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
-                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedAngebot(null)}></div>
-                    
-                    <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
-                        
-                        <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
-                            
-                            <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth" onScroll={() => setHasScrolledGallery(true)}>
-                                {(selectedAngebot.images || (selectedAngebot.image ? [selectedAngebot.image] : [])).map((img, idx) => (
-                                    <div key={idx} onClick={() => setIsLightboxOpen(idx)} className="relative w-full h-full flex-shrink-0 snap-start cursor-pointer">
-                                        <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
-                                    </div>
-                                ))}
-                            </div>
-                            
-                            <div className="hidden md:flex absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none items-center justify-center">
-                                <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
-                                    <Search size={14}/> Bilder ansehen
-                                </span>
-                            </div>
-
-                            <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end pointer-events-none">
-                                <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)]"></div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
-                                <div className="relative z-[30] p-6 md:p-10">
-                                    <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedAngebot.title}</h2>
-                                </div>
-                            </div>
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedAngebot(null); }} className="md:hidden fixed top-4 right-4 text-white text-3xl z-[60] bg-black/40 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
-                        </div>
-                        
-                        <div className="w-full md:w-1/2 h-auto md:h-full md:overflow-y-auto bg-white relative z-10 flex flex-col">
-                            <button onClick={() => { setSelectedAngebot(null); }} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
-                            
-                            <div className="p-6 md:p-10 lg:p-16 flex-1 flex flex-col">
-                                {bookingStatus ? ( <div className="text-center py-12 serif italic text-xl flex-1 flex flex-col items-center justify-center"><div className="text-4xl mb-6">✓</div>{bookingStatus}</div> ) : (
-                                    <div className="space-y-10 flex-1 flex flex-col">
-                                        <p className="text-zinc-600 text-base leading-relaxed font-light">{selectedAngebot.longDesc}</p>
-                                        
-                                        <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
-                                            <h3 className="serif text-2xl italic mb-3">Benötigst du Ideen?</h3>
-                                            <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
-                                            <button onClick={() => { 
-                                                setSelectedAngebot(null); 
-                                                setFilterKategorie('Alle');
-                                                setIsIdeenBoardOpen(true); 
-                                            }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
-                                                Zu den Touren-Ideen
-                                            </button>
-                                        </div>
-
-                                        {selectedAngebot.season === 'Spontantouren' ? (
-                                            <form onSubmit={handleSpontanNewsletter} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
-                                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Anmeldung für News & Spontantouren:</h4>
-                                                <div className="grid grid-cols-2 gap-6">
-                                                    <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                    <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                </div>
-                                                <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                <button type="submit" disabled={isSubmitting} className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">{isSubmitting ? 'Wird gesendet...' : 'Für News anmelden'}</button>
-                                            </form>
-                                        ) : (
-                                            <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
-                                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Oder direkt eine Anfrage senden:</h4>
-                                                <div className="grid grid-cols-2 gap-6">
-                                                    <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                    <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                </div>
-                                                <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent h-28 resize-y" />
-                                                <button type="submit" className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">Anfrage Senden</button>
-                                            </form>
-                                        )}
+                                {showLevelInfo && (
+                                    <div className="bg-[#f9f9f7] p-4 text-xs text-zinc-600 leading-relaxed border border-zinc-100 fade-in">
+                                        <p className="font-bold mb-2">Level Info:</p>
+                                        <p className="mb-2"><b>1:</b> Einfach / Basis (Einsteiger)</p>
+                                        <p className="mb-2"><b>2:</b> Mittel / Fortgeschritten</p>
+                                        <p><b>3:</b> Schwer / Experte (Hohes Level)</p>
                                     </div>
                                 )}
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
 
-            {/* =========================================
-                MODAL FÜR BERGFÜHRER
-               ========================================= */}
-            {selectedTeamMember && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center md:p-8">
-                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedTeamMember(null)}></div>
-                    
-                    <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
-                        
-                        <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
-                            
-                            <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth" onScroll={() => setHasScrolledGallery(true)}>
-                                {(selectedTeamMember.images || (selectedTeamMember.image ? [selectedTeamMember.image] : [])).map((img, idx) => (
-                                    <div key={idx} onClick={() => setIsLightboxOpen(idx)} className="relative w-full h-full flex-shrink-0 snap-start cursor-pointer">
-                                        <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
+                        <div className="flex-1">
+                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
+                                {filteredTours.map(tour => (
+                                    <div key={tour.id} className="tour-card group cursor-pointer" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); setIsAllToursModalOpen(false); }}>
+                                        <div className="aspect-[4/5] overflow-hidden bg-zinc-100 mb-6 grayscale group-hover:grayscale-0 transition-all duration-1000 relative">
+                                            <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={tour.title} />
+                                            <div className="absolute top-4 right-4 bg-white/95 px-4 py-2 text-[8px] uppercase tracking-[0.2em] font-bold">
+                                                {tour.maxPlaetze - tour.angemeldet > 0 ? `${tour.maxPlaetze - tour.angemeldet} Plätze` : 'Voll'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-400 mb-2">{tour.date}</p>
+                                            <h3 className="text-lg font-light mb-2 tracking-wide uppercase">{tour.title}</h3>
+                                            <div className="flex justify-between items-end mt-4 pt-4 border-t border-zinc-100">
+                                                <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold pb-1">{tour.price}</p>
+                                                <div className="flex flex-col gap-1.5 items-end">
+                                                    <DifficultyDots label="Technik" level={getTech(tour)} />
+                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                             
-                            <div className="hidden md:flex absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none items-center justify-center">
-                                <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
-                                    <Search size={14}/> Bilder ansehen
-                                </span>
-                            </div>
+                            {filteredTours.length === 0 && (
+                                <div className="text-center py-20 border border-dashed border-zinc-200">
+                                    <p className="text-zinc-400 italic mb-4">Keine Touren gefunden, die deinen Kriterien entsprechen.</p>
+                                    <button onClick={() => { setFilterKategorie('Alle'); setFilterTechnik('Alle'); setFilterAusdauer('Alle'); }} className="text-[10px] uppercase tracking-widest border border-zinc-300 px-6 py-2 hover:border-black transition">Filter zurücksetzen</button>
+                                </div>
+                            )}
 
-                            <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end pointer-events-none">
-                                <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)]"></div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
-                                <div className="relative z-[30] p-6 md:p-10">
-                                    <p className="text-[10px] uppercase tracking-widest text-white/80 font-bold mb-2">{selectedTeamMember.title}</p>
-                                    <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedTeamMember.name}</h2>
+                            <div className="mt-20 pt-12 border-t border-zinc-200 text-center">
+                                <h3 className="serif text-2xl italic mb-4">Nichts passendes dabei?</h3>
+                                <p className="text-sm text-zinc-500 mb-8 max-w-lg mx-auto">Schau doch mal in unserem Ideenboard vorbei. Dort findest du Inspiration für Touren, die wir auf Anfrage für dich organisieren können.</p>
+                                <button onClick={() => { setIsAllToursModalOpen(false); setIsIdeenBoardOpen(true); }} className="border border-black px-12 py-4 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-black hover:text-white transition-all inline-block">Zum Ideenboard</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Ideenboard Modal (Beispieltouren) */}
+            {isIdeenBoardOpen && (
+                <div className="fixed inset-0 z-[100] bg-[#f9f9f7] overflow-y-auto fade-in">
+                    <div className="sticky top-0 bg-[#f9f9f7]/90 backdrop-blur-md z-10 border-b border-zinc-200 px-6 py-6 md:px-12 flex justify-between items-center">
+                        <h2 className="serif text-2xl md:text-3xl italic">Touren Ideen</h2>
+                        <button onClick={() => setIsIdeenBoardOpen(false)} className="text-black hover:opacity-50 transition p-2"><X size={28} strokeWidth={1} /></button>
+                    </div>
+                    
+                    <div className="px-6 md:px-12 py-12 max-w-7xl mx-auto text-center max-w-3xl mb-8">
+                        <p className="text-base text-zinc-600 leading-relaxed">Hier findest du eine Auswahl an Klassikern und Traumtouren, die wir nicht im festen Programm haben, aber <b>jederzeit auf Anfrage</b> für dich (und deine Freunde) organisieren können.</p>
+                    </div>
+
+                    <div className="px-6 md:px-12 pb-20 max-w-7xl mx-auto flex flex-col md:flex-row gap-8 items-start">
+                        <div className="w-full md:w-64 flex-shrink-0 sticky top-32">
+                            <div className="flex items-center gap-2 mb-6 font-bold uppercase tracking-widest text-[11px] text-black border-b border-zinc-200 pb-3">
+                                <Filter size={14}/> Filter (Ideen)
+                            </div>
+                            
+                            <div className="space-y-6">
+                                <div>
+                                    <h4 className="text-[9px] uppercase tracking-widest text-zinc-400 mb-3 font-bold">Kategorie</h4>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="flex items-center gap-3 text-sm cursor-pointer group">
+                                            <input type="radio" checked={filterKategorie === 'Alle'} onChange={() => setFilterKategorie('Alle')} className="accent-black w-3 h-3" />
+                                            <span className="group-hover:text-black text-zinc-600 transition">Alle Ideen</span>
+                                        </label>
+                                        {tourKategorien.map(kat => (
+                                            <label key={kat} className="flex items-center gap-3 text-sm cursor-pointer group">
+                                                <input type="radio" checked={filterKategorie === kat} onChange={() => setFilterKategorie(kat)} className="accent-black w-3 h-3" />
+                                                <span className="group-hover:text-black text-zinc-600 transition">{kat}</span>
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedTeamMember(null); }} className="md:hidden fixed top-4 right-4 text-white text-3xl z-[60] bg-black/40 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
+                        </div>
+
+                        <div className="flex-1">
+                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
+                                {filteredExampleTours.map(tour => (
+                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-4 border border-zinc-100 hover:border-black transition" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(true); setIsIdeenBoardOpen(false); }}>
+                                        <div className="aspect-square overflow-hidden bg-zinc-100 mb-6 grayscale group-hover:grayscale-0 transition-all duration-1000">
+                                            <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={tour.title} />
+                                        </div>
+                                        <div>
+                                            <span className="text-[8px] uppercase tracking-widest bg-zinc-100 text-zinc-500 px-2 py-1 mb-3 inline-block">Auf Anfrage</span>
+                                            <h3 className="text-lg font-light mb-2 tracking-wide uppercase">{tour.title}</h3>
+                                            <div className="flex justify-between items-end mt-4 pt-4 border-t border-zinc-100">
+                                                <p className="text-[10px] uppercase tracking-widest text-black font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Anfragen <ArrowRight size={12}/></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            {filteredExampleTours.length === 0 && (
+                                <div className="text-center py-20 border border-dashed border-zinc-300">
+                                    <p className="text-zinc-500 italic mb-4">Keine Ideen in dieser Kategorie vorhanden.</p>
+                                    <button onClick={() => setFilterKategorie('Alle')} className="text-[10px] uppercase tracking-widest border border-zinc-300 bg-white px-6 py-2 hover:border-black transition">Filter zurücksetzen</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Selected Angebot / Anfrage Modal (mit spezifischem Spontantouren Bereich) */}
+            {selectedAngebot && (
+                <div className="fixed inset-0 z-[100] bg-white/95 backdrop-blur-md overflow-y-auto fade-in">
+                    <button onClick={() => setSelectedAngebot(null)} className="fixed top-8 right-8 md:top-12 md:right-12 z-50 p-4 bg-white/80 hover:bg-white rounded-full text-black hover:scale-110 transition-transform shadow-lg"><X size={24} strokeWidth={1.5} /></button>
+                    
+                    <div className="max-w-4xl mx-auto px-6 py-20 md:py-32">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mb-4 block">{selectedAngebot.season}</span>
+                        <h2 className="serif text-4xl md:text-5xl italic mb-12">{selectedAngebot.title}</h2>
+                        
+                        <div className="prose prose-zinc prose-p:font-light prose-p:leading-relaxed max-w-none text-base md:text-lg text-zinc-600 mb-16 whitespace-pre-line">
+                            {selectedAngebot.longDesc || selectedAngebot.desc}
+                        </div>
+
+                        {(selectedAngebot.images || (selectedAngebot.image ? [selectedAngebot.image] : [])).length > 0 && (
+                            <div className="grid grid-cols-2 gap-4 mb-16">
+                                {(selectedAngebot.images || (selectedAngebot.image ? [selectedAngebot.image] : [])).slice(0, 2).map((img, idx) => (
+                                    <div key={idx} className={`aspect-[4/3] bg-zinc-100 ${idx === 0 ? 'col-span-2' : ''}`}>
+                                        <img src={img} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" alt="" />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {selectedAngebot.season === 'Spontantouren' ? (
+                            <div className="mt-12 bg-[#fdfcf9] border border-amber-100 p-8 md:p-12 shadow-sm">
+                                <h3 className="serif text-2xl italic mb-4">Bist du spontan?</h3>
+                                <p className="text-zinc-600 text-sm leading-relaxed mb-6">
+                                    Unsere kurzfristigen Spontantouren werden direkt unter den <button onClick={() => { setSelectedAngebot(null); setIsAllToursModalOpen(true); }} className="underline font-bold text-amber-700 hover:text-black transition">aktuellen Touren</button> ausgeschrieben. 
+                                    <br/><br/>
+                                    Willst du als Erste/r davon erfahren? Trag dich unten für die E-Mail-Benachrichtigung ein!
+                                </p>
+                                
+                                {bookingStatus ? (
+                                    <div className="p-6 bg-green-50 text-green-800 text-center font-bold text-sm uppercase tracking-widest">{bookingStatus}</div>
+                                ) : (
+                                    <form onSubmit={handleSpontanNewsletter} className="space-y-6">
+                                        <div className="grid md:grid-cols-2 gap-6">
+                                            <div><label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Vorname</label><input name="vorname" required className="w-full border-b border-zinc-300 p-3 bg-transparent outline-none focus:border-black" /></div>
+                                            <div><label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Nachname</label><input name="name" required className="w-full border-b border-zinc-300 p-3 bg-transparent outline-none focus:border-black" /></div>
+                                        </div>
+                                        <div><label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">E-Mail</label><input name="email" type="email" required className="w-full border-b border-zinc-300 p-3 bg-transparent outline-none focus:border-black" /></div>
+                                        
+                                        <div className="pt-4">
+                                            <button type="submit" disabled={isSubmitting} className="w-full bg-black text-white px-8 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-zinc-800 transition">
+                                                {isSubmitting ? 'Wird eingetragen...' : 'Für Benachrichtigung eintragen'}
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="mt-12 bg-[#f9f9f7] p-8 md:p-12 border border-zinc-100">
+                                <h3 className="serif text-2xl italic mb-4">Benötigst du Ideen?</h3>
+                                <p className="text-zinc-600 text-sm leading-relaxed mb-8">Schau dir unsere <button onClick={() => { setSelectedAngebot(null); setIsIdeenBoardOpen(true); }} className="underline font-bold text-black">Touren Ideen</button> an oder schreibe uns eine unverbindliche Anfrage in diesem Bereich.</p>
+                                
+                                {bookingStatus ? (
+                                    <div className="p-6 bg-green-50 text-green-800 text-center font-bold text-sm uppercase tracking-widest">{bookingStatus}</div>
+                                ) : (
+                                    <form onSubmit={handleAnfrage} className="space-y-6">
+                                        <div className="grid md:grid-cols-2 gap-6">
+                                            <div><label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Vorname</label><input name="vorname" required className="w-full border-b border-zinc-300 p-3 bg-transparent outline-none focus:border-black transition" /></div>
+                                            <div><label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Nachname</label><input name="name" required className="w-full border-b border-zinc-300 p-3 bg-transparent outline-none focus:border-black transition" /></div>
+                                        </div>
+                                        <div><label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">E-Mail</label><input name="email" type="email" required className="w-full border-b border-zinc-300 p-3 bg-transparent outline-none focus:border-black transition" /></div>
+                                        <div><label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Deine Nachricht / Idee</label><textarea name="nachricht" required rows="4" className="w-full border-b border-zinc-300 p-3 bg-transparent outline-none focus:border-black transition resize-y"></textarea></div>
+                                        
+                                        <div className="pt-4">
+                                            <button type="submit" disabled={isSubmitting} className="w-full bg-black text-white px-8 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-zinc-800 transition">
+                                                {isSubmitting ? 'Wird gesendet...' : 'Unverbindlich Anfragen'}
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Selected Tour Modal */}
+            {selectedTour && (
+                <div className="fixed inset-0 z-[100] bg-white overflow-y-auto fade-in">
+                    <button onClick={() => { setSelectedTour(null); setIsBookingMode(false); setIsInquiryMode(false); }} className="fixed top-6 right-6 md:top-12 md:right-12 z-50 p-3 md:p-4 bg-white/80 hover:bg-white rounded-full text-black hover:scale-110 transition-transform shadow-lg"><X size={24} strokeWidth={1.5} /></button>
+                    
+                    <div className="flex flex-col lg:flex-row min-h-screen">
+                        <div className="w-full lg:w-1/2 lg:fixed lg:h-screen bg-zinc-100 flex flex-col p-6 md:p-12 justify-center relative overflow-hidden group/gallery">
+                            <div className="absolute top-6 left-6 z-20"><span className="text-[9px] bg-white px-3 py-1 font-bold uppercase tracking-widest">{selectedTour.isExample ? 'Tour Idee / Anfrage' : 'Tour Detail'}</span></div>
+                            
+                            {(selectedTour.images || (selectedTour.image ? [selectedTour.image] : [])).length > 0 ? (
+                                <div className="relative w-full h-[50vh] lg:h-full flex items-center justify-center">
+                                    <div className="w-full h-full overflow-x-auto snap-x snap-mandatory flex hide-scrollbar" 
+                                         onScroll={() => setHasScrolledGallery(true)}>
+                                        {(selectedTour.images || (selectedTour.image ? [selectedTour.image] : [])).map((img, idx) => (
+                                            <div key={idx} id={`gallery-img-${idx}`} className="w-full h-full flex-shrink-0 snap-center relative cursor-zoom-in" onClick={() => setIsLightboxOpen(idx)}>
+                                                <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={`${selectedTour.title} - Bild ${idx + 1}`} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {(selectedTour.images || []).length > 1 && !hasScrolledGallery && (
+                                        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 text-[9px] uppercase tracking-widest rounded-full backdrop-blur-sm pointer-events-none animate-swipe-hint flex items-center gap-2 lg:hidden">
+                                            <Hand size={12}/> Wischen für mehr Bilder
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center"><p className="text-zinc-400 text-sm uppercase tracking-widest italic">Kein Bild verfügbar</p></div>
+                            )}
                         </div>
                         
-                        <div className="w-full md:w-1/2 h-auto md:h-full md:overflow-y-auto bg-white relative z-10 flex flex-col">
-                            <button onClick={() => setSelectedTeamMember(null)} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
+                        <div className="w-full lg:w-1/2 lg:ml-[50%] p-6 md:p-16 lg:p-24 bg-white relative">
+                            {isBookingMode ? (
+                                <div className="fade-in">
+                                    <button onClick={() => setIsBookingMode(false)} className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 hover:text-black mb-12 flex items-center gap-2 transition-colors"><ChevronLeft size={14}/> Zurück zur Übersicht</button>
+                                    <h2 className="serif text-3xl italic mb-4">Anmeldung</h2>
+                                    <p className="text-xl font-light uppercase tracking-widest mb-10 pb-6 border-b border-zinc-100">{selectedTour.title}</p>
+                                    
+                                    {bookingStatus ? (
+                                        <div className="p-8 bg-[#f9f9f7] text-center border border-zinc-200">
+                                            <p className="text-green-700 font-bold text-sm uppercase tracking-widest mb-4">Erfolgreich!</p>
+                                            <p className="text-zinc-600 leading-relaxed">{bookingStatus}</p>
+                                        </div>
+                                    ) : (
+                                        <form onSubmit={handleBooking} className="space-y-8">
+                                            <div className="grid md:grid-cols-2 gap-8">
+                                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Vorname *</label><input name="vorname" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Nachname *</label><input name="name" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                            </div>
+                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">E-Mail *</label><input name="email" type="email" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Telefon *</label><input name="phone" type="tel" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                            <div className="pt-4 border-t border-zinc-100"><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Strasse / Nr. *</label><input name="adresse" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                            <div className="grid md:grid-cols-3 gap-8">
+                                                <div className="md:col-span-1"><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">PLZ *</label><input name="plz" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                                <div className="md:col-span-2"><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Ort *</label><input name="ort" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                            </div>
+                                            <div className="pt-4 border-t border-zinc-100">
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Ernährung (Vegi, Vegan, Allergien)</label>
+                                                <input name="ernaehrung" placeholder="Falls zutreffend..." className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Besonderes / Anmerkungen</label>
+                                                <textarea name="besonderes" rows="3" placeholder="Gibt es sonst noch etwas, das wir wissen sollten?" className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition resize-y" />
+                                            </div>
+                                            
+                                            <div className="pt-6 border-t border-zinc-200">
+                                                <label className="flex items-start gap-4 cursor-pointer group">
+                                                    <input type="checkbox" name="agb_accept" required className="mt-1 accent-black w-4 h-4 cursor-pointer" />
+                                                    <span className="text-xs text-zinc-500 leading-relaxed group-hover:text-black transition">Ich habe die <a href="#" className="underline">Allgemeinen Geschäftsbedingungen (AGB)</a> gelesen und akzeptiere diese verbindlich.</span>
+                                                </label>
+                                            </div>
+                                            
+                                            <div className="pt-8">
+                                                <button type="submit" disabled={isSubmitting} className="w-full bg-black text-white px-8 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-zinc-800 transition">
+                                                    {isSubmitting ? 'Wird gesendet...' : 'Verbindlich Anmelden'}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    )}
+                                </div>
+                            ) : isInquiryMode ? (
+                                <div className="fade-in">
+                                    <button onClick={() => setIsInquiryMode(false)} className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 hover:text-black mb-12 flex items-center gap-2 transition-colors"><ChevronLeft size={14}/> Zurück zur Idee</button>
+                                    <h2 className="serif text-3xl italic mb-4">Tour Anfragen</h2>
+                                    <p className="text-xl font-light uppercase tracking-widest mb-10 pb-6 border-b border-zinc-100">{selectedTour.title}</p>
+                                    
+                                    {bookingStatus ? (
+                                        <div className="p-8 bg-[#f9f9f7] text-center border border-zinc-200">
+                                            <p className="text-green-700 font-bold text-sm uppercase tracking-widest mb-4">Erfolgreich!</p>
+                                            <p className="text-zinc-600 leading-relaxed">{bookingStatus}</p>
+                                        </div>
+                                    ) : (
+                                        <form onSubmit={handleIdeaInquiry} className="space-y-8">
+                                            <p className="text-sm text-zinc-500 mb-8 leading-relaxed">Du interessierst dich für diese Tour? Genial! Schreib uns einfach deine Wunschtermine oder sonstige Vorstellungen. Wir melden uns dann mit einem unverbindlichen Vorschlag bei dir.</p>
+                                            
+                                            <div className="grid md:grid-cols-2 gap-8">
+                                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Vorname *</label><input name="vorname" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                                <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Nachname *</label><input name="name" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                            </div>
+                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">E-Mail *</label><input name="email" type="email" required className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition" /></div>
+                                            
+                                            <div className="pt-4 border-t border-zinc-100">
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Deine Vorstellungen (Termine, Anzahl Personen, Fragen...)</label>
+                                                <textarea name="nachricht" required rows="5" className="w-full border-b border-zinc-200 p-3 mt-1 outline-none focus:border-black transition resize-y" />
+                                            </div>
+                                            
+                                            <div className="pt-8">
+                                                <button type="submit" disabled={isSubmitting} className="w-full bg-black text-white px-8 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-zinc-800 transition">
+                                                    {isSubmitting ? 'Wird gesendet...' : 'Unverbindlich Anfragen'}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="fade-in">
+                                    <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-400 mb-4">{getKat(selectedTour, tourKategorien)}</p>
+                                    <h2 className="serif text-4xl md:text-5xl italic mb-8">{selectedTour.title}</h2>
+                                    
+                                    <div className="flex flex-wrap gap-x-12 gap-y-6 mb-12 pb-8 border-b border-zinc-100">
+                                        {!selectedTour.isExample && (
+                                            <>
+                                                <div><p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1">Datum</p><p className="font-medium text-sm">{selectedTour.date}</p></div>
+                                                <div><p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1">Preis</p><p className="font-medium text-sm">{selectedTour.price}</p></div>
+                                                <div><p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1">Verfügbar</p><p className="font-medium text-sm">{selectedTour.maxPlaetze - selectedTour.angemeldet > 0 ? `${selectedTour.maxPlaetze - selectedTour.angemeldet} von ${selectedTour.maxPlaetze} Plätzen` : 'Ausgebucht'}</p></div>
+                                            </>
+                                        )}
+                                        <div className="w-full sm:w-auto"><p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-2">Anforderung</p><div className="flex flex-col gap-2"><DifficultyDots label="Technik" level={getTech(selectedTour)} info="Beschreibt die technischen Schwierigkeiten (Klettern, Gelände)"/><DifficultyDots label="Ausdauer" level={getAusd(selectedTour)} info="Konditionelle Anforderung (Höhenmeter, Distanz)"/></div></div>
+                                        {selectedTour.guide && (
+                                            <div className="w-full sm:w-auto"><p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1">Guide</p><p className="font-medium text-sm">{selectedTour.guide}</p></div>
+                                        )}
+                                    </div>
+
+                                    <div className="prose prose-zinc prose-p:font-light prose-p:leading-relaxed max-w-none text-base md:text-lg text-zinc-600 mb-16 whitespace-pre-line">
+                                        {selectedTour.description}
+                                    </div>
+
+                                    {!selectedTour.isExample && (
+                                        <div className="mb-16">
+                                            <Accordion title="Programm / Ablauf" content={selectedTour.ablauf} />
+                                            <Accordion title="Leistungen" content={selectedTour.leistungen} />
+                                            <Accordion title="Anforderungen" content={selectedTour.anforderungen} />
+                                            <Accordion title="Material">
+                                                <div className="pb-4">
+                                                    {selectedTour.material && <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line mb-4">{selectedTour.material}</p>}
+                                                    {selectedTour.materialUrl && (
+                                                        <a href={selectedTour.materialUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-6 py-3 border border-zinc-200 text-[10px] uppercase font-bold tracking-widest hover:border-black transition">
+                                                            <FileText size={14} /> Materialliste PDF
+                                                        </a>
+                                                    )}
+                                                    {!selectedTour.material && !selectedTour.materialUrl && <p className="text-zinc-400 italic text-sm">Keine spezielle Materialliste hinterlegt.</p>}
+                                                </div>
+                                            </Accordion>
+                                        </div>
+                                    )}
+
+                                    <div className="sticky bottom-0 bg-white pt-8 pb-8 border-t border-zinc-100 z-10">
+                                        {selectedTour.isExample ? (
+                                            <button onClick={() => setIsInquiryMode(true)} className="w-full bg-black text-white px-8 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-zinc-800 transition">
+                                                Unverbindlich Anfragen
+                                            </button>
+                                        ) : selectedTour.maxPlaetze - selectedTour.angemeldet > 0 ? (
+                                            <button onClick={() => setIsBookingMode(true)} className="w-full bg-black text-white px-8 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-zinc-800 transition">
+                                                Jetzt Anmelden
+                                            </button>
+                                        ) : (
+                                            <button disabled className="w-full bg-zinc-200 text-zinc-500 px-8 py-5 text-[10px] font-bold uppercase tracking-[0.3em] cursor-not-allowed">
+                                                Ausgebucht
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Selected Team Member Modal */}
+            {selectedTeamMember && (
+                <div className="fixed inset-0 z-[100] bg-white overflow-y-auto fade-in">
+                    <button onClick={() => setSelectedTeamMember(null)} className="fixed top-6 right-6 md:top-12 md:right-12 z-50 p-3 md:p-4 bg-white/80 hover:bg-white rounded-full text-black hover:scale-110 transition-transform shadow-lg"><X size={24} strokeWidth={1.5} /></button>
+                    
+                    <div className="flex flex-col lg:flex-row min-h-screen">
+                        <div className="w-full lg:w-1/2 lg:fixed lg:h-screen bg-zinc-100 flex flex-col p-6 md:p-12 justify-center relative overflow-hidden group/gallery">
+                            <div className="absolute top-6 left-6 z-20"><span className="text-[9px] bg-white px-3 py-1 font-bold uppercase tracking-widest">Kollektiv / Guide</span></div>
                             
-                            <div className="p-6 md:p-10 lg:p-16 flex-1 flex flex-col">
-                                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Steckbrief</h3>
-                                <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line mb-8">{selectedTeamMember.desc}</p>
+                            {(selectedTeamMember.images || (selectedTeamMember.image ? [selectedTeamMember.image] : [])).length > 0 ? (
+                                <div className="relative w-full h-[50vh] lg:h-full flex items-center justify-center">
+                                    <div className="w-full h-full overflow-x-auto snap-x snap-mandatory flex hide-scrollbar" 
+                                         onScroll={() => setHasScrolledGallery(true)}>
+                                        {(selectedTeamMember.images || (selectedTeamMember.image ? [selectedTeamMember.image] : [])).map((img, idx) => (
+                                            <div key={idx} id={`gallery-img-${idx}`} className="w-full h-full flex-shrink-0 snap-center relative cursor-zoom-in" onClick={() => setIsLightboxOpen(idx)}>
+                                                <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={`${selectedTeamMember.name} - Bild ${idx + 1}`} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {(selectedTeamMember.images || []).length > 1 && !hasScrolledGallery && (
+                                        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 text-[9px] uppercase tracking-widest rounded-full backdrop-blur-sm pointer-events-none animate-swipe-hint flex items-center gap-2 lg:hidden">
+                                            <Hand size={12}/> Wischen
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center"><p className="text-zinc-400 text-sm uppercase tracking-widest italic">Kein Bild verfügbar</p></div>
+                            )}
+                        </div>
+
+                        <div className="w-full lg:w-1/2 lg:ml-[50%] p-6 md:p-16 lg:p-24 bg-white flex flex-col justify-center">
+                            <div className="fade-in max-w-xl mx-auto w-full">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-400 mb-4">{selectedTeamMember.title}</p>
+                                <h2 className="serif text-4xl md:text-5xl italic mb-12">{selectedTeamMember.name}</h2>
                                 
-                                <div className="space-y-6 pt-4 border-t border-zinc-100 flex-1">
+                                <div className="prose prose-zinc prose-p:font-light prose-p:leading-relaxed max-w-none text-base md:text-lg text-zinc-600 mb-16 whitespace-pre-line">
+                                    {selectedTeamMember.desc}
+                                </div>
+
+                                <div className="space-y-6 pt-12 border-t border-zinc-100">
                                     {activeTeamAttributes.map(attr => {
                                         const val = selectedTeamMember.customFields?.[attr] || getLegacyTeamField(selectedTeamMember, attr);
-                                        if (!val) return null;
+                                        if(!val) return null;
                                         return (
-                                            <div key={attr} className="grid grid-cols-12 gap-4 border-b border-zinc-100 pb-4">
-                                                <span className="col-span-12 md:col-span-4 text-[9px] uppercase tracking-widest font-bold text-zinc-400">{attr}</span>
-                                                <span className="col-span-12 md:col-span-8 text-xs text-zinc-700 leading-relaxed whitespace-pre-line">{val}</span>
+                                            <div key={attr} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-6">
+                                                <span className="text-[9px] uppercase tracking-widest text-zinc-400 font-bold w-32 shrink-0 pt-1">{attr}</span>
+                                                <span className="text-sm font-light text-zinc-700 italic leading-relaxed">"{val}"</span>
                                             </div>
                                         );
                                     })}
@@ -949,284 +1069,62 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 </div>
             )}
 
-            {/* =========================================
-                GROSSES TOUR DETAIL MODAL
-               ========================================= */}
-            {selectedTour && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
-                    <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-md" onClick={() => setSelectedTour(null)}></div>
-                    
-                    <div className="relative bg-white w-full max-w-[100vw] lg:max-w-7xl h-full md:h-[95vh] md:shadow-2xl flex flex-col md:flex-row overflow-y-auto md:overflow-hidden fade-in">
-                        
-                        <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
-                            
-                            {/* Main Detail Image Slider (100% breite, kein Wisch-Hinweis) */}
-                            <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth">
-                                {(selectedTour.images || [selectedTour.image]).map((img, idx) => (
-                                    <div
-                                        key={idx}
-                                        onClick={() => setIsLightboxOpen(idx)}
-                                        className="relative w-full h-full flex-shrink-0 snap-start cursor-pointer"
-                                    >
-                                        <img src={img} loading="lazy" decoding="async" className="w-full h-full object-cover" alt="" />
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Hover Overlay Desktop */}
-                            <div className="hidden md:flex absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-500 z-[25] pointer-events-none items-center justify-center">
-                                <span className="bg-black/60 backdrop-blur-md text-white px-6 py-3 rounded-full text-[10px] uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
-                                    <Search size={14}/> Galerie öffnen
-                                </span>
-                            </div>
-
-                            <div className="absolute inset-x-0 bottom-0 h-48 z-[20] flex flex-col justify-end pointer-events-none">
-                                <div className="absolute inset-0 backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black)]"></div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-[21]"></div>
-                                <div className="relative z-[30] p-6 md:p-10">
-                                    <div className="flex gap-3 items-center mb-3">
-                                        <span className="bg-white text-black px-2 py-1 text-[8px] uppercase tracking-widest font-bold">{getKat(selectedTour, tourKategorien)}</span>
-                                        {selectedTour.isExample && <span className="bg-blue-500 text-white px-2 py-1 text-[8px] uppercase tracking-widest font-bold">Idee</span>}
-                                    </div>
-                                    <h2 className="serif text-3xl md:text-5xl lg:text-6xl italic text-white leading-tight">{selectedTour.title}</h2>
-                                </div>
-                            </div>
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedTour(null); setIsInquiryMode(false); }} className="md:hidden fixed top-4 right-4 text-white text-3xl z-[60] bg-black/40 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md pointer-events-auto">&times;</button>
-                        </div>
-
-                        <div className="w-full md:w-1/2 h-auto md:h-full md:overflow-y-auto bg-white relative z-10 flex flex-col">
-                            <button onClick={() => { setSelectedTour(null); setIsInquiryMode(false); }} className="hidden md:flex absolute top-6 right-6 text-zinc-400 hover:text-black text-4xl z-10 transition-colors w-12 h-12 items-center justify-center bg-zinc-50 hover:bg-zinc-100 rounded-full">&times;</button>
-
-                            <div className="p-6 md:p-10 lg:p-16 flex-1 flex flex-col">
-                                {!isBookingMode && !isInquiryMode ? (
-                                    <div className="fade-in space-y-12 flex-1 flex flex-col">
-
-                                        <div className="space-y-8 flex-1">
-                                            <div>
-                                                <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Beschreibung</h3>
-                                                <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
-                                            </div>
-
-                                            <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
-                                                {(!selectedTour.isExample || selectedTour.date) && (
-                                                    <Accordion title="Datum & Durchführung">
-                                                        <div className="text-zinc-600 font-light text-sm pb-2">
-                                                            <div className="flex items-center gap-2 mb-3 flex-wrap">
-                                                                <span className="text-sm">{selectedTour.date || 'Auf Anfrage'}</span>
-                                                                {/* MIN TEILNEHMER BADGE */}
-                                                                {!selectedTour.isExample && selectedTour.minPlaetze > 0 && (
-                                                                    selectedTour.angemeldet >= selectedTour.minPlaetze ? (
-                                                                        <span className="text-[9px] bg-green-100 text-green-700 px-2 py-1 uppercase tracking-widest font-bold ml-2 block sm:inline-block mt-2 sm:mt-0">Definitive Durchführung gesichert</span>
-                                                                    ) : (
-                                                                        <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 uppercase tracking-widest font-bold ml-2 block sm:inline-block mt-2 sm:mt-0">Noch {selectedTour.minPlaetze - selectedTour.angemeldet} Anmeldung(en) bis Minimum Teilnehmerzahl erreicht.</span>
-                                                                    )
-                                                                )}
-                                                            </div>
-
-                                                            {selectedTour.guide && (
-                                                                <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center gap-2">
-                                                                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Voraussichtliche Leitung:</span>
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            const guideProfile = teamProfiles.find(p => p.name === selectedTour.guide);
-                                                                            if (guideProfile) setSelectedTeamMember(guideProfile);
-                                                                        }}
-                                                                        className="font-bold underline hover:text-black text-zinc-600 transition-colors text-xs"
-                                                                    >
-                                                                        {selectedTour.guide}
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </Accordion>
-                                                )}
-
-                                                {!selectedTour.isExample && <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />}
-
-                                                <Accordion title="Anforderungen & Level">
-                                                    <div className="pb-4 space-y-6">
-                                                        <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
-                                                            <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                                                <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
-                                                                    <span className="text-[9px] uppercase tracking-widest font-bold text-black">Technik</span>
-                                                                    <div className="flex gap-1">
-                                                                        {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getTech(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                                                <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
-                                                                    <span className="text-[9px] uppercase tracking-widest font-bold text-black">Ausdauer</span>
-                                                                    <div className="flex gap-1">
-                                                                        {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getAusd(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        {selectedTour.anforderungen && (
-                                                            <div className="pt-4 border-t border-zinc-100">
-                                                                <p className="text-zinc-600 font-light text-sm whitespace-pre-line">{selectedTour.anforderungen}</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </Accordion>
-                                            </div>
-
-                                            {!selectedTour.isExample && (
-                                                <div className="grid md:grid-cols-2 gap-6 pt-4">
-                                                    <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
-                                                        <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-3">Material</p>
-                                                        {selectedTour.materialUrl ? (
-                                                            <a href={selectedTour.materialUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-zinc-500 mb-4 underline underline-offset-4">
-                                                                <FileText size={16}/> {selectedTour.materialName || 'Material gemäss PDF'}
-                                                            </a>
-                                                        ) : (
-                                                            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400 mb-4">
-                                                                <FileText size={16}/> Keine Liste hinterlegt
-                                                            </span>
-                                                        )}
-                                                        <p className="text-xs text-zinc-500 italic leading-relaxed whitespace-pre-line">{selectedTour.material || 'Keine speziellen Ergänzungen.'}</p>
-                                                    </div>
-                                                    <div className="p-6 bg-[#f9f9f7] border border-zinc-100 flex flex-col justify-center">
-                                                        <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-2">Preis & Leistungen</p>
-                                                        <p className="serif text-3xl italic mb-3">{selectedTour.price}</p>
-                                                        <p className="text-xs text-zinc-500 leading-relaxed whitespace-pre-line">{selectedTour.leistungen || 'Führung durch dipl. Bergführer.'}</p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {selectedTour.isExample ? (
-                                            <button onClick={() => setIsInquiryMode(true)} className="mt-8 w-full py-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all bg-black text-white hover:bg-zinc-800 shadow-xl">
-                                                Interesse wecken / Unverbindlich anfragen
-                                            </button>
-                                        ) : (
-                                            <button onClick={() => setIsBookingMode(true)} disabled={selectedTour.maxPlaetze <= selectedTour.angemeldet} className={`mt-8 w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all ${selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800 shadow-xl'}`}>
-                                                {selectedTour.maxPlaetze <= selectedTour.angemeldet ? 'Ausgebucht' : 'Verbindlich Anmelden'}
-                                            </button>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="fade-in max-w-2xl mx-auto w-full">
-                                        {bookingStatus ? (
-                                            <div className="text-center space-y-8 py-20"><div className="text-4xl">✓</div><p className="serif text-2xl italic">{bookingStatus}</p><button onClick={() => { setSelectedTour(null); setIsBookingMode(false); setIsInquiryMode(false); }} className="text-[10px] uppercase tracking-widest border-b border-black pb-1">Zurück</button></div>
-                                        ) : (
-                                            isInquiryMode ? (
-                                                <form onSubmit={handleIdeaInquiry} className="space-y-8">
-                                                    <div className="flex justify-between items-end mb-10"><h3 className="serif text-3xl italic">Unverbindliche Anfrage</h3><button type="button" onClick={() => setIsInquiryMode(false)} className="text-[10px] uppercase tracking-widest opacity-40 hover:opacity-100 transition">Abbrechen</button></div>
-                                                    <p className="text-xs text-zinc-500 mb-6">Wir freuen uns über dein Interesse an der Tour-Idee "{selectedTour.title}". Lass uns wissen, wann du Zeit hast und wir schauen die Details gemeinsam an.</p>
-                                                    <div className="grid grid-cols-2 gap-8">
-                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Vorname *</label><input name="vorname" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Name *</label><input name="name" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                    </div>
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">E-Mail *</label><input type="email" name="email" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Deine Nachricht (Wunschdatum, Gruppengröße...)</label><textarea name="nachricht" rows="4" required className="w-full bg-transparent outline-none text-sm resize-y"></textarea></div>
-                                                    <button type="submit" disabled={isSubmitting} className={`w-full py-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all shadow-xl ${isSubmitting ? 'bg-zinc-400 text-white cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800'}`}>
-                                                        {isSubmitting ? 'Wird gesendet...' : 'Anfrage Senden'}
-                                                    </button>
-                                                </form>
-                                            ) : (
-                                                <form onSubmit={handleBooking} className="space-y-8">
-                                                    <div className="flex justify-between items-end mb-10"><h3 className="serif text-3xl italic">Anmeldung</h3><button type="button" onClick={() => setIsBookingMode(false)} className="text-[10px] uppercase tracking-widest opacity-40 hover:opacity-100 transition">Abbrechen</button></div>
-                                                    <div className="grid grid-cols-2 gap-8">
-                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Vorname *</label><input name="vorname" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Name *</label><input name="name" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                    </div>
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Adresse *</label><input name="adresse" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                    <div className="grid grid-cols-2 gap-8">
-                                                        <div className="grid grid-cols-3 gap-4 border-b border-zinc-200 pb-2">
-                                                            <div className="col-span-1 space-y-1">
-                                                                <label className="text-[8px] uppercase tracking-widest text-zinc-400">PLZ *</label>
-                                                                <input name="plz" required className="w-full bg-transparent outline-none text-sm" />
-                                                            </div>
-                                                            <div className="col-span-2 space-y-1">
-                                                                <label className="text-[8px] uppercase tracking-widest text-zinc-400">Ort *</label>
-                                                                <input name="ort" required className="w-full bg-transparent outline-none text-sm" />
-                                                            </div>
-                                                        </div>
-                                                        <div className="space-y-1 border-b border-zinc-200 pb-2">
-                                                            <label className="text-[8px] uppercase tracking-widest text-zinc-400">Geburtstag *</label>
-                                                            <input type="date" name="geburtstag" required className="w-full bg-transparent outline-none text-sm cursor-pointer" />
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-8">
-                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">E-Mail *</label><input type="email" name="email" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                        <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Telefon *</label><input type="tel" name="phone" required className="w-full bg-transparent outline-none text-sm" /></div>
-                                                    </div>
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Ernährung (Allergien, Vegetarisch...)</label><input name="ernaehrung" className="w-full bg-transparent outline-none text-sm" /></div>
-                                                    <div className="space-y-1 border-b border-zinc-200 pb-2"><label className="text-[8px] uppercase tracking-widest text-zinc-400">Besonderes / Bemerkungen</label><textarea name="besonderes" rows="2" className="w-full bg-transparent outline-none text-sm resize-none"></textarea></div>
-                                                    <div className="flex items-start gap-4 py-6 group cursor-pointer">
-                                                        <div className="relative flex items-center">
-                                                            <input type="checkbox" id="agb_check" name="agb_accept" required className="peer appearance-none w-5 h-5 border border-zinc-300 rounded-none bg-white checked:bg-black checked:border-black transition-all cursor-pointer" />
-                                                            <svg className="absolute w-3 h-3 text-white pointer-events-none hidden peer-checked:block left-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                                        </div>
-                                                        <label htmlFor="agb_check" className="text-[10px] text-zinc-500 leading-relaxed uppercase tracking-widest cursor-pointer select-none flex-1">
-                                                            Ich habe die <a href="/agb.pdf" target="_blank" rel="noreferrer" className="underline hover:text-black transition-colors" onClick={(e) => e.stopPropagation()}>allgemeinen Geschäftsbedingungen</a> gelesen und akzeptiere diese. * <span className="block mt-2 text-zinc-400 normal-case italic tracking-normal text-[11px]">Der Abschluss einer Annullationskostenversicherung wird dringend empfohlen.</span>
-                                                        </label>
-                                                    </div>
-                                                    <button type="submit" disabled={isSubmitting} className={`w-full py-6 text-[10px] uppercase tracking-[0.4em] transition-all shadow-xl ${isSubmitting ? 'bg-zinc-400 text-white cursor-not-allowed' : 'bg-black text-white hover:bg-zinc-800'}`}>
-                                                        {isSubmitting ? 'Wird gesendet...' : 'Verbindlich Anmelden'}
-                                                    </button>
-                                                </form>
-                                            )
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Vollbild Lightbox mit Touch/Swipe (Kombiniert für Touren, Team & Angebote) */}
-            {isLightboxOpen !== null && (selectedTour || selectedTeamMember || selectedAngebot) && (() => {
+            {/* Lightbox Modal für Bildergalerie */}
+            {(() => {
                 const activeItem = selectedTour || selectedTeamMember || selectedAngebot;
+                if (!activeItem || isLightboxOpen === null) return null;
                 const imgs = activeItem.images || (activeItem.image ? [activeItem.image] : []);
+                if (imgs.length === 0) return null;
 
                 return (
-                <div className="fixed inset-0 z-[400] bg-black flex items-center justify-center fade-in">
-                    <div className="absolute inset-0" onClick={() => setIsLightboxOpen(null)}></div>
-                    <button onClick={() => setIsLightboxOpen(null)} className="absolute top-4 right-4 md:top-8 md:right-8 text-white text-4xl md:text-5xl z-[450] w-12 h-12 flex items-center justify-center bg-black/40 rounded-full md:bg-transparent md:w-auto md:h-auto">&times;</button>
-
-                    {/* --- MOBILE GALLERY (Native Scroll) --- */}
-                    <div className="md:hidden absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar items-center z-[410]" onScroll={() => setHasScrolledGallery(true)}>
-                        {(!hasScrolledGallery && imgs.length > 1) && (
-                            <div className="absolute inset-0 z-[450] flex items-center justify-center pointer-events-none">
-                                <div className="bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full text-xs uppercase tracking-widest flex items-center gap-3 animate-swipe-hint">
-                                    <Hand size={18}/> Bilder wischen
-                                </div>
-                            </div>
-                        )}
-                        {imgs.map((img, idx) => (
-                            <div key={idx} id={`gallery-img-${idx}`} className={`relative h-auto max-h-[85vh] flex-shrink-0 snap-center flex items-center justify-center ${imgs.length > 1 ? 'w-[85%] px-2' : 'w-full'}`}>
-                                <img src={img} loading="lazy" decoding="async" className="max-w-full max-h-[85vh] object-contain shadow-2xl pointer-events-none" alt="" />
-                            </div>
-                        ))}
+                <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-lg flex items-center justify-center p-4 md:p-8 fade-in select-none" onClick={() => setIsLightboxOpen(null)}>
+                    <button className="absolute top-6 right-6 md:top-10 md:right-10 text-white p-4 hover:scale-110 transition-transform z-[210]"><X size={32} strokeWidth={1} /></button>
+                    
+                    <div className="absolute top-8 left-1/2 -translate-x-1/2 text-zinc-500 text-[10px] uppercase tracking-widest font-bold z-[210]">
+                        {isLightboxOpen + 1} / {imgs.length}
                     </div>
 
-                    {/* --- DESKTOP GALLERY (Arrows) --- */}
+                    {imgs.length > 1 && (
+                        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/50 text-[10px] uppercase tracking-widest z-[210] flex gap-8">
+                            <span className="hidden md:inline">← Pfeiltasten →</span>
+                            <span className="md:hidden flex items-center gap-2"><Hand size={14}/> Wischen</span>
+                        </div>
+                    )}
+
                     {(() => {
-                        if (imgs.length <= 1) return (
-                            <div className="hidden md:flex relative max-w-full max-h-full items-center justify-center z-[410] p-12 pointer-events-none">
-                                <img src={imgs[0]} className="max-w-full max-h-full object-contain shadow-2xl" alt="" />
-                            </div>
-                        );
+                        let handlers = {};
+                        if (imgs.length > 1) {
+                            let touchStartX = 0;
+                            handlers = {
+                                onTouchStart: e => touchStartX = e.touches[0].clientX,
+                                onTouchEnd: e => {
+                                    const diffX = e.changedTouches[0].clientX - touchStartX;
+                                    if (diffX > 50) setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length);
+                                    else if (diffX < -50) setIsLightboxOpen((prev) => (prev + 1) % imgs.length);
+                                }
+                            };
+                        }
                         return (
-                            <div className="hidden md:flex absolute inset-0 items-center justify-center z-[410]">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }}
-                                    className="absolute left-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[420]"
-                                >&#8249;</button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }}
-                                    className="absolute right-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[420]"
-                                >&#8250;</button>
+                            <div className="relative w-full h-full flex items-center justify-center" {...handlers}>
+                                {imgs.length > 1 && (
+                                    <>
+                                        <button onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }} className="absolute left-4 md:left-12 top-1/2 -translate-y-1/2 text-white p-4 hover:scale-110 transition-transform z-[210] md:hidden"><ChevronLeft size={32} strokeWidth={1} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }} className="absolute right-4 md:right-12 top-1/2 -translate-y-1/2 text-white p-4 hover:scale-110 transition-transform z-[210] md:hidden"><ChevronRight size={32} strokeWidth={1} /></button>
+                                    </>
+                                )}
+                                <div className="hidden md:flex absolute inset-0 items-center justify-center z-[210]">
+                                    {imgs.length > 1 && (
+                                        <>
+                                            <button onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev - 1 + imgs.length) % imgs.length); }} className="absolute left-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[220]">&#8249;</button>
+                                            <button onClick={(e) => { e.stopPropagation(); setIsLightboxOpen((prev) => (prev + 1) % imgs.length); }} className="absolute right-8 top-1/2 -translate-y-1/2 text-white text-6xl p-8 hover:scale-110 transition-transform z-[220]">&#8250;</button>
+                                        </>
+                                    )}
+                                </div>
                                 <img
                                     src={imgs[isLightboxOpen]}
                                     loading="lazy"
                                     decoding="async"
-                                    className="max-w-full max-h-[90vh] object-contain shadow-2xl transition-all duration-500 pointer-events-none px-24"
+                                    className="max-w-full max-h-[85vh] object-contain shadow-2xl transition-all duration-300 pointer-events-none z-[210]"
                                     alt=""
                                 />
                             </div>

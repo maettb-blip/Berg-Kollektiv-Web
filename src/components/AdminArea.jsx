@@ -162,12 +162,11 @@ export default function AdminArea({ user, touren = [], onLogout }) {
   const activeAngebote = angebote.filter(a => !a.isDeleted);
   const activeAngeboteFallback = activeAngebote.length > 0 ? activeAngebote : DEFAULT_ANGEBOTE;
   
-  // NEU: Sortierungslogik für die Angebote
   const categoryOrder = websiteSettings.categoryOrder || DEFAULT_ANGEBOTE.map(a => a.id);
   const sortedAngebote = [...activeAngeboteFallback].sort((a, b) => {
       let indexA = categoryOrder.indexOf(a.id);
       let indexB = categoryOrder.indexOf(b.id);
-      if (indexA === -1) indexA = 999; // Neue Einträge ans Ende
+      if (indexA === -1) indexA = 999;
       if (indexB === -1) indexB = 999;
       return indexA - indexB;
   });
@@ -181,6 +180,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
   const [notizInput, setNotizInput] = useState('');
   
   const [editingTour, setEditingTour] = useState(null);
+  const [exportingTour, setExportingTour] = useState(null); // NEU: Export State
   const [editingTask, setEditingTask] = useState(null);
   const [editingDoc, setEditingDoc] = useState(null);
   const [editingProtocol, setEditingProtocol] = useState(null);
@@ -274,7 +274,6 @@ export default function AdminArea({ user, touren = [], onLogout }) {
       setArray(newArr);
   };
 
-  // NEU: Up/Down Sortierfunktion für Angebote
   const moveAngebot = async (idx, dir) => {
       const newOrder = sortedAngebote.map(a => a.id);
       if (idx + dir < 0 || idx + dir >= newOrder.length) return;
@@ -814,6 +813,120 @@ export default function AdminArea({ user, touren = [], onLogout }) {
         alert("Fehler beim Erstellen des PDFs.");
     }
   };
+
+  // --- NEUE EXPORT FUNKTIONEN FÜR TOUREN ---
+  const generateTourText = (t) => {
+      let txt = `🏔️ *${t.title}*\n\n`;
+      if (!t.isExample && t.date) txt += `📅 Datum: ${t.date}\n`;
+      if (!t.isExample && t.price) txt += `💰 Preis: ${t.price}\n`;
+      txt += `\n${t.description}\n\n`;
+      if (!t.isExample && t.leistungen) txt += `✅ Leistungen:\n${t.leistungen}\n\n`;
+      if (!t.isExample && t.ablauf) txt += `📍 Ablauf:\n${t.ablauf}\n\n`;
+      txt += `Bist du dabei? Melde dich bei uns! 🧗‍♂️`;
+      return txt;
+  };
+
+  const copyTourText = (t) => {
+      const text = generateTourText(t);
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+          document.execCommand('copy');
+          alert("Erfolgreich in die Zwischenablage kopiert!");
+      } catch (err) {
+          alert("Kopieren fehlgeschlagen.");
+      }
+      document.body.removeChild(textArea);
+  };
+
+  const generateTourPDF = async (t) => {
+      try {
+          await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+          const { jsPDF } = window.jspdf;
+          const d = new jsPDF();
+
+          const checkPageBreak = (heightNeeded) => {
+              if (yPos + heightNeeded > 280) {
+                  d.addPage();
+                  yPos = 20;
+              }
+          };
+
+          let yPos = 20;
+          d.setFontSize(22);
+          const titleSplit = d.splitTextToSize(t.title, 180);
+          d.text(titleSplit, 14, yPos);
+          yPos += (titleSplit.length * 8) + 5;
+
+          d.setFontSize(11);
+          d.setTextColor(100);
+          if (!t.isExample) {
+              d.text(`Datum: ${t.date || 'Auf Anfrage'} | Preis: ${t.price || '-'}`, 14, yPos);
+              yPos += 10;
+          }
+
+          d.setFontSize(12);
+          d.setTextColor(0);
+          const splitDesc = d.splitTextToSize(t.description || '', 180);
+          checkPageBreak(splitDesc.length * 6);
+          d.text(splitDesc, 14, yPos);
+          yPos += (splitDesc.length * 6) + 10;
+
+          if (!t.isExample && t.ablauf) {
+              checkPageBreak(20);
+              d.setFontSize(14);
+              d.setTextColor(0);
+              d.text('Ablauf', 14, yPos);
+              yPos += 6;
+
+              d.setFontSize(11);
+              d.setTextColor(80);
+              const splitAblauf = d.splitTextToSize(t.ablauf, 180);
+              checkPageBreak(splitAblauf.length * 5);
+              d.text(splitAblauf, 14, yPos);
+              yPos += (splitAblauf.length * 5) + 10;
+          }
+
+          if (!t.isExample && t.leistungen) {
+              checkPageBreak(20);
+              d.setFontSize(14);
+              d.setTextColor(0);
+              d.text('Leistungen', 14, yPos);
+              yPos += 6;
+
+              d.setFontSize(11);
+              d.setTextColor(80);
+              const splitLeist = d.splitTextToSize(t.leistungen, 180);
+              checkPageBreak(splitLeist.length * 5);
+              d.text(splitLeist, 14, yPos);
+              yPos += (splitLeist.length * 5) + 10;
+          }
+
+          if (!t.isExample && t.anforderungen) {
+              checkPageBreak(20);
+              d.setFontSize(14);
+              d.setTextColor(0);
+              d.text('Anforderungen', 14, yPos);
+              yPos += 6;
+
+              d.setFontSize(11);
+              d.setTextColor(80);
+              const splitAnf = d.splitTextToSize(t.anforderungen, 180);
+              checkPageBreak(splitAnf.length * 5);
+              d.text(splitAnf, 14, yPos);
+          }
+
+          d.save(`Tour_${t.title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+          logAction(`Tour PDF exportiert: ${t.title}`);
+      } catch (err) {
+          console.error("PDF Export Fehler:", err);
+          alert("Fehler beim Erstellen des PDFs.");
+      }
+  };
+  // ------------------------------------------
 
   const getFilteredAnfragen = () => {
       let filtered = (anfragen || []).filter(a => !a.isDeleted);
@@ -1618,7 +1731,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                         <button onClick={() => { setEditingTour({ title: '', visible: true, isExample: false, date: '', description: '', price: '', image: '', minPlaetze: 1, maxPlaetze: 4, leistungen: '', anforderungen: '', ablauf: '', material: '', stornoFrist: '', kategorie: tourKategorien[0] || 'Hochtour', technik: 2, ausdauer: 2 }); setPendingDeletes([]); }} className="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition shadow-md w-full md:w-auto text-center">+ Neue Tour erstellen</button>
                     </div>
 
-                    {!editingTour && (
+                    {!editingTour && !exportingTour && (
                         <div className="flex flex-col gap-4 mb-8 bg-zinc-50 p-4 md:p-6 border border-zinc-200">
                             <div className="flex flex-wrap gap-4 border-b border-zinc-200 pb-4">
                                 {['Öffentlich', 'Versteckt', 'Beispieltouren', 'Alle'].map(status => (
@@ -1792,6 +1905,29 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                 <button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-black text-white px-12 py-4 text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition text-center">{isUploading ? 'Lädt...' : 'Tour Speichern'}</button>
                             </div>
                         </form>
+                    ) : exportingTour ? (
+                        <div className="space-y-8 bg-white p-5 md:p-8 border border-zinc-200 shadow-sm fade-in max-w-2xl mx-auto mt-8">
+                            <div className="flex justify-between items-center border-b border-zinc-100 pb-4">
+                                <h3 className="serif text-2xl italic">Tour Exportieren</h3>
+                                <button onClick={() => setExportingTour(null)} className="hover:text-red-500 transition p-2"><X size={20}/></button>
+                            </div>
+                            <div className="space-y-6">
+                                <p className="text-sm text-zinc-600">Exportiere die Details der Tour <b>"{exportingTour.title}"</b>, um sie mit Kunden oder Teilnehmern zu teilen.</p>
+            
+                                <div className="bg-zinc-50 border border-zinc-200 p-4 max-h-64 overflow-y-auto text-xs whitespace-pre-line font-mono text-zinc-500">
+                                    {generateTourText(exportingTour)}
+                                </div>
+            
+                                <div className="flex flex-col gap-3 pt-4 border-t border-zinc-100">
+                                    <button onClick={() => copyTourText(exportingTour)} className="w-full bg-black text-white py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition flex justify-center items-center gap-2">
+                                        <Share2 size={16}/> Text Kopieren (Für WhatsApp / Mail)
+                                    </button>
+                                    <button onClick={() => generateTourPDF(exportingTour)} className="w-full border border-zinc-300 bg-white py-4 text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-50 transition flex justify-center items-center gap-2">
+                                        <Download size={16}/> Als PDF Generieren
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     ) : (
                         <div className="space-y-4 fade-in">
                             {(touren || []).filter(t => {
@@ -1821,6 +1957,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
+                                        <button onClick={() => setExportingTour(t)} className="text-[10px] font-bold uppercase tracking-widest text-blue-500 hover:text-blue-700 flex items-center gap-2"><Share2 size={14}/> Export</button>
                                         <button onClick={() => { setEditingTour({...t, images: t.images || (t.image ? [t.image] : [])}); setPendingDeletes([]); }} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
                                         <button onClick={() => softDelete('touren', t.id, t.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
