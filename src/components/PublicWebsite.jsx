@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp, onSnapshot, setDoc } from "firebase/firestore";
 import { FileText, Tag, Filter, Search, Info, Hand } from 'lucide-react';
 
 // ==========================================
@@ -54,17 +54,6 @@ const getKat = (t, defaultCats) => {
 const getTech = (t) => t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t.ausdauer ? Number(t.ausdauer) : 2;
 
-const techDetails = {
-    1: "Einfach – Keine besonderen technischen Vorkenntnisse nötig. Trittsicherheit auf Bergwegen reicht aus.",
-    2: "Mittel – Schwindelfreiheit erforderlich. Leichte Kletterstellen oder steileres Gelände können vorkommen.",
-    3: "Schwer – Sehr gute Klettertechnik, absolute Schwindelfreiheit und sicheres Gehen in exponiertem Gelände zwingend."
-};
-const ausdDetails = {
-    1: "Einfach – Gemütliches Tempo, Gehzeiten von bis zu 4 Stunden pro Tag mit ausreichend Pausen.",
-    2: "Mittel – Gute Grundkondition erforderlich. Gehzeiten von 4 bis 7 Stunden pro Tag.",
-    3: "Schwer – Sehr gute Kondition für lange, anstrengende Etappen mit über 7 Stunden Gehzeit pro Tag."
-};
-
 const DifficultyDots = ({ label, level, info }) => (
     <div className="flex items-center gap-2 relative group/tooltip" title={info}>
         <span className="text-[9px] uppercase tracking-widest text-zinc-500 w-16">{label}</span>
@@ -86,7 +75,6 @@ const Accordion = ({ title, content, children }) => {
                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-zinc-400 group-hover:text-black transition-colors">{title}</h3>
                 <span className="text-xl font-light text-zinc-400 group-hover:text-black transition-colors">{isOpen ? '−' : '+'}</span>
             </button>
-            {/* Erhöhte max-h für sehr lange Texte wie Programm & Ablauf */}
             <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[5000px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
                 {children ? children : <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line pb-4">{content}</p>}
             </div>
@@ -97,7 +85,8 @@ const Accordion = ({ title, content, children }) => {
 export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
-    const [angebotTab, setAngebotTab] = useState('Sommer');
+    
+    // UI und Filter States
     const [selectedAngebot, setSelectedAngebot] = useState(null);
     const [selectedTour, setSelectedTour] = useState(null);
     const [selectedTeamMember, setSelectedTeamMember] = useState(null);
@@ -110,8 +99,11 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [teamProfiles, setTeamProfiles] = useState([]);
     const [teamAttributes, setTeamAttributes] = useState([]);
     const [angebote, setAngebote] = useState([]);
-    const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [] });
     
+    // Vereinte Deklaration von websiteSettings
+    const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [], categoryOrder: [], tabOrder: ['Sommer', 'Winter', 'Spontantouren'] });
+    const [angebotTab, setAngebotTab] = useState('Sommer');
+
     const [isAllToursModalOpen, setIsAllToursModalOpen] = useState(false);
     const [isIdeenBoardOpen, setIsIdeenBoardOpen] = useState(false);
     const [filterKategorie, setFilterKategorie] = useState('Alle');
@@ -121,7 +113,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     const [hasScrolledGallery, setHasScrolledGallery] = useState(false);
-
     const [activeHeroVideo, setActiveHeroVideo] = useState('/hero-video.mp4');
 
     useEffect(() => {
@@ -131,7 +122,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         } else {
             setActiveHeroVideo('/hero-video.mp4');
         }
-    }, [websiteSettings]);
+    }, [websiteSettings.heroVideos]);
 
     const visibleTours = touren.filter(t => t.visible !== false && t.isExample !== true && !t.isDeleted);
     const exampleTours = touren.filter(t => t.isExample === true && !t.isDeleted);
@@ -140,9 +131,18 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const activeAngebote = angebote.filter(a => !a.isDeleted);
     const activeAngeboteFallback = activeAngebote.length > 0 ? activeAngebote : DEFAULT_ANGEBOTE;
     
-    const sommerAngebote = activeAngeboteFallback.filter(a => a.season === 'Sommer');
-    const winterAngebote = activeAngeboteFallback.filter(a => a.season === 'Winter');
-    const tourKategorien = [...new Set(activeAngeboteFallback.map(a => a.title))];
+    const categoryOrder = websiteSettings.categoryOrder || DEFAULT_ANGEBOTE.map(a => a.id);
+    const sortedAngebote = [...activeAngeboteFallback].sort((a, b) => {
+        let indexA = categoryOrder.indexOf(a.id);
+        let indexB = categoryOrder.indexOf(b.id);
+        if (indexA === -1) indexA = 999;
+        if (indexB === -1) indexB = 999;
+        return indexA - indexB;
+    });
+
+    const RUBRIKEN = websiteSettings.tabOrder || ['Sommer', 'Winter', 'Spontantouren'];
+    const renderedAngebote = sortedAngebote.filter(a => a.season === angebotTab);
+    const tourKategorien = [...new Set(sortedAngebote.map(a => a.title))];
 
     const visibleTeamProfiles = teamProfiles.filter(t => t.visible !== false && !t.isDeleted);
     const activeTeamAttributes = teamAttributes.length > 0 ? teamAttributes : ['Superkraft', 'Kryptonit', 'Touren-Snack', 'Lebensmotto'];
@@ -156,8 +156,16 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     
     const filteredExampleTours = exampleTours.filter(t => {
         if (filterKategorie !== 'Alle' && getKat(t, tourKategorien) !== filterKategorie) return false;
+        if (filterTechnik !== 'Alle' && getTech(t) !== parseInt(filterTechnik)) return false;
+        if (filterAusdauer !== 'Alle' && getAusd(t) !== parseInt(filterAusdauer)) return false;
         return true;
     });
+
+    useEffect(() => {
+        if(!angebotTab && websiteSettings.tabOrder?.length > 0) {
+            setAngebotTab(websiteSettings.tabOrder[0]);
+        }
+    }, [websiteSettings.tabOrder]);
 
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 100);
@@ -178,7 +186,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             snap => setAngebote(snap.docs.map(d => ({ id: d.id, ...d.data() }))), logError
         );
         const unsub4 = onSnapshot(doc(db, 'settings', 'website'), 
-            snap => { if (snap.exists()) setWebsiteSettings(snap.data()); }, logError
+            snap => { if (snap.exists()) setWebsiteSettings(prev => ({...prev, ...snap.data()})); }, logError
         );
         return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
     }, []);
@@ -236,19 +244,32 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         }
     }, [isLightboxOpen]);
 
+    const saveCustomerData = async (email, data) => {
+        if (!email) return;
+        try {
+            await setDoc(doc(db, 'kunden_notizen', email.toLowerCase().trim()), data, { merge: true });
+        } catch (e) { console.error("Konnte Kunde nicht im CRM anlegen", e); }
+    };
+
     const handleAnfrage = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
         const thema = selectedAngebot ? selectedAngebot.title : 'Allgemeine Anfrage';
         
+        const email = fd.get('email');
+        const vorname = fd.get('vorname');
+        const name = fd.get('name');
+
         const data = {
             thema: thema,
-            vorname: fd.get('vorname'), name: fd.get('name'), email: fd.get('email'),
+            vorname, name, email,
             nachricht: fd.get('nachricht'), timestamp: serverTimestamp()
         };
 
         try {
             await addDoc(collection(db, 'anfragen'), data);
+            await saveCustomerData(email, { email: email.toLowerCase().trim(), vorname, name });
+
             const emailjs = await loadEmailJS();
             await emailjs.send(
                 "service_b02rsz7", "template_ewn7qhm", 
@@ -259,20 +280,44 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         } catch (err) { alert("Fehler beim Senden der Anfrage. Bitte versuche es später erneut."); }
     };
 
+    const handleSpontanNewsletter = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        const fd = new FormData(e.target);
+        const email = fd.get('email');
+        const vorname = fd.get('vorname');
+        const name = fd.get('name');
+
+        try {
+            await saveCustomerData(email, { email: email.toLowerCase().trim(), vorname, name, newsletter: true });
+            setBookingStatus("Erfolgreich für News & Spontantouren eingetragen!");
+            setTimeout(() => { setSelectedAngebot(null); setBookingStatus(null); setIsSubmitting(false); }, 3000);
+        } catch(err) {
+            setBookingStatus("Fehler bei der Anmeldung. Bitte später versuchen.");
+            setIsSubmitting(false);
+        }
+    };
+
     const handleIdeaInquiry = async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
         setIsSubmitting(true);
         const fd = new FormData(e.target);
         
+        const email = fd.get('email');
+        const vorname = fd.get('vorname');
+        const name = fd.get('name');
+
         const data = {
             thema: `Idee: ${selectedTour.title}`,
-            vorname: fd.get('vorname'), name: fd.get('name'), email: fd.get('email'),
+            vorname, name, email,
             nachricht: fd.get('nachricht'), timestamp: serverTimestamp()
         };
 
         try {
             await addDoc(collection(db, 'anfragen'), data);
+            await saveCustomerData(email, { email: email.toLowerCase().trim(), vorname, name });
+
             const emailjs = await loadEmailJS();
             
             await emailjs.send(
@@ -296,10 +341,18 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
         if (!fd.get('agb_accept')) { alert("Bitte akzeptiere die AGB, um fortzufahren."); setIsSubmitting(false); return; }
 
+        const email = fd.get('email');
+        const vorname = fd.get('vorname');
+        const name = fd.get('name');
+        const phone = fd.get('phone');
+        const adresse = fd.get('adresse');
+        const plz = fd.get('plz');
+        const ort = fd.get('ort');
+
         const data = {
             tourId: selectedTour.id, tourTitle: selectedTour.title,
-            name: fd.get('name'), vorname: fd.get('vorname'), adresse: fd.get('adresse'),
-            plz_ort: `${fd.get('plz')} ${fd.get('ort')}`, email: fd.get('email'), phone: fd.get('phone'),
+            name, vorname, adresse,
+            plz_ort: `${plz} ${ort}`, email, phone,
             geburtstag: fd.get('geburtstag'), ernaehrung: fd.get('ernaehrung'), besonderes: fd.get('besonderes'),
             timestamp: serverTimestamp()
         };
@@ -309,6 +362,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                 await addDoc(collection(db, 'anmeldungen'), data);
                 await updateDoc(doc(db, 'touren', selectedTour.id), { angemeldet: increment(1) });
                 
+                await saveCustomerData(email, { email: email.toLowerCase().trim(), vorname, name, phone, adresse, plz_ort: `${plz} ${ort}` });
+
                 const emailjs = await loadEmailJS();
                 await emailjs.send(
                     "service_b02rsz7", "template_1uovyru", 
@@ -408,13 +463,14 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className="max-w-7xl mx-auto">
                         <div className="text-center mb-20">
                             <h2 className="serif text-4xl italic mb-6">Unser Angebot</h2>
-                            <div className="flex justify-center space-x-12 text-sm md:text-base font-semibold uppercase tracking-widest">
-                                <button onClick={() => setAngebotTab('Sommer')} className={`pb-2 opacity-40 transition-all ${angebotTab === 'Sommer' ? 'border-b-2 border-black opacity-100' : ''}`}>Sommer</button>
-                                <button onClick={() => setAngebotTab('Winter')} className={`pb-2 opacity-40 transition-all ${angebotTab === 'Winter' ? 'border-b-2 border-black opacity-100' : ''}`}>Winter</button>
+                            <div className="flex justify-center space-x-6 md:space-x-12 text-sm md:text-base font-semibold uppercase tracking-widest flex-wrap gap-y-4">
+                                {RUBRIKEN.map(tab => (
+                                    <button key={tab} onClick={() => setAngebotTab(tab)} className={`pb-2 opacity-40 transition-all ${angebotTab === tab ? 'border-b-2 border-black opacity-100' : ''}`}>{tab}</button>
+                                ))}
                             </div>
                         </div>
                         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-                        {(angebotTab === 'Sommer' ? sommerAngebote : winterAngebote).map((item, i) => (
+                        {renderedAngebote.map((item, i) => (
                             <div key={item.id || i} onClick={() => setSelectedAngebot(item)} className="p-8 border border-zinc-100 bg-[#fdfdfc] cursor-pointer hover:border-black transition-all group flex flex-col justify-between min-h-[250px]">
                                 <div>
                                     <h3 className="serif text-xl italic mb-4 group-hover:translate-x-1 transition-transform">{item.title}</h3>
@@ -425,6 +481,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 </div>
                             </div>
                         ))}
+                        {renderedAngebote.length === 0 && <p className="col-span-full text-center py-12 text-zinc-400 italic">Noch keine Angebote in dieser Kategorie.</p>}
                         </div>
                     </div>
                 </section>
@@ -451,8 +508,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             <div className="flex justify-between items-end mt-4 pt-4 border-t border-zinc-200">
                                                 <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold pb-1">{tour.price}</p>
                                                 <div className="flex flex-col gap-1.5 items-end">
-                                                    <DifficultyDots label="Technik" level={getTech(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
-                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                    <DifficultyDots label="Technik" level={getTech(tour)} />
+                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
                                                 </div>
                                             </div>
                                         </div>
@@ -619,8 +676,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             <div className="flex justify-between items-end border-t border-zinc-100 pt-4 mt-4">
                                                 <p className="text-zinc-700 text-sm font-bold pb-1">{tour.price}</p>
                                                 <div className="flex flex-col gap-1.5 items-end">
-                                                    <DifficultyDots label="Technik" level={getTech(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
-                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                    <DifficultyDots label="Technik" level={getTech(tour)} />
+                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
                                                 </div>
                                             </div>
                                         </div>
@@ -650,16 +707,67 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     
                     <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
                         <div className="max-w-7xl mx-auto">
-                            <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-                                <div className="flex items-center gap-3 w-full sm:w-auto">
-                                    <Filter size={16} className="text-zinc-400" />
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
-                                    <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                        <option value="Alle">Alle Kategorien</option>
-                                        {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
-                                    </select>
+                            <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
+                                <div className="flex flex-col sm:flex-row gap-6 w-full">
+                                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                                        <Filter size={16} className="text-zinc-400 flex-shrink-0" />
+                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
+                                        <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                            <option value="Alle">Alle Kategorien</option>
+                                            {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
+                                        <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                            <option value="Alle">Alle Level</option>
+                                            <option value="1">1 - Einfach</option>
+                                            <option value="2">2 - Mittel</option>
+                                            <option value="3">3 - Schwer</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
+                                        <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                            <option value="Alle">Alle Level</option>
+                                            <option value="1">1 - Einfach</option>
+                                            <option value="2">2 - Mittel</option>
+                                            <option value="3">3 - Schwer</option>
+                                        </select>
+                                    </div>
                                 </div>
+                                
+                                <button 
+                                    onClick={() => setShowLevelInfo(!showLevelInfo)} 
+                                    className={`flex items-center gap-2 px-4 py-2 border transition-colors text-[10px] uppercase tracking-widest font-bold w-full lg:w-auto justify-center mt-4 lg:mt-0 ${showLevelInfo ? 'bg-black text-white border-black' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100 hover:text-black'}`}
+                                >
+                                    <Info size={14} /> Info Technik & Ausdauer
+                                </button>
                             </div>
+
+                            {showLevelInfo && (
+                                <div className="mt-6 p-6 md:p-8 bg-[#f9f9f7] border border-zinc-200 text-xs font-light leading-relaxed relative fade-in">
+                                    <button onClick={() => setShowLevelInfo(false)} className="absolute top-4 right-4 text-2xl text-zinc-400 hover:text-black leading-none">&times;</button>
+                                    <div className="grid md:grid-cols-2 gap-8">
+                                        <div>
+                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-black mb-4 border-b border-zinc-200 pb-2">Level Technik</h4>
+                                            <ul className="space-y-3 text-zinc-600">
+                                                <li><span className="font-bold text-black">Level 1:</span> {techDetails[1]}</li>
+                                                <li><span className="font-bold text-black">Level 2:</span> {techDetails[2]}</li>
+                                                <li><span className="font-bold text-black">Level 3:</span> {techDetails[3]}</li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-black mb-4 border-b border-zinc-200 pb-2">Level Ausdauer</h4>
+                                            <ul className="space-y-3 text-zinc-600">
+                                                <li><span className="font-bold text-black">Level 1:</span> {ausdDetails[1]}</li>
+                                                <li><span className="font-bold text-black">Level 2:</span> {ausdDetails[2]}</li>
+                                                <li><span className="font-bold text-black">Level 3:</span> {ausdDetails[3]}</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -678,8 +786,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             <h3 className="text-xl font-medium mb-4 uppercase">{tour.title}</h3>
                                             <div className="flex justify-end items-end border-t border-zinc-100 pt-4 mt-4">
                                                 <div className="flex flex-col gap-1.5 items-end">
-                                                    <DifficultyDots label="Technik" level={getTech(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
-                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} info="1 = Einfach | 2 = Mittel | 3 = Schwer" />
+                                                    <DifficultyDots label="Technik" level={getTech(tour)} />
+                                                    <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
                                                 </div>
                                             </div>
                                         </div>
@@ -750,16 +858,28 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             </button>
                                         </div>
 
-                                        <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
-                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Oder direkt eine Anfrage senden:</h4>
-                                            <div className="grid grid-cols-2 gap-6">
-                                                <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                            </div>
-                                            <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                            <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent h-28 resize-y" />
-                                            <button type="submit" className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">Anfrage Senden</button>
-                                        </form>
+                                        {selectedAngebot.season === 'Spontantouren' ? (
+                                            <form onSubmit={handleSpontanNewsletter} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
+                                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Anmeldung für News & Spontantouren:</h4>
+                                                <div className="grid grid-cols-2 gap-6">
+                                                    <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                    <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                </div>
+                                                <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                <button type="submit" disabled={isSubmitting} className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">{isSubmitting ? 'Wird gesendet...' : 'Für News anmelden'}</button>
+                                            </form>
+                                        ) : (
+                                            <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
+                                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Oder direkt eine Anfrage senden:</h4>
+                                                <div className="grid grid-cols-2 gap-6">
+                                                    <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                    <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                </div>
+                                                <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent h-28 resize-y" />
+                                                <button type="submit" className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">Anfrage Senden</button>
+                                            </form>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -928,22 +1048,20 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                     <div className="pb-4 space-y-6">
                                                         <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
                                                             <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                                                <div className="flex items-center gap-3 w-32 flex-shrink-0 pt-0.5">
+                                                                <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
                                                                     <span className="text-[9px] uppercase tracking-widest font-bold text-black">Technik</span>
                                                                     <div className="flex gap-1">
                                                                         {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getTech(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
                                                                     </div>
                                                                 </div>
-                                                                <p>{techDetails[getTech(selectedTour)]}</p>
                                                             </div>
                                                             <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                                                <div className="flex items-center gap-3 w-32 flex-shrink-0 pt-0.5">
+                                                                <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
                                                                     <span className="text-[9px] uppercase tracking-widest font-bold text-black">Ausdauer</span>
                                                                     <div className="flex gap-1">
                                                                         {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getAusd(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
                                                                     </div>
                                                                 </div>
-                                                                <p>{ausdDetails[getAusd(selectedTour)]}</p>
                                                             </div>
                                                         </div>
                                                         {selectedTour.anforderungen && (

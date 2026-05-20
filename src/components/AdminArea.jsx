@@ -8,7 +8,7 @@ import {
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
   LayoutDashboard, User, Users, X, Edit, ExternalLink, Trash2, MapPin, 
   FileText, Share2, Link as LinkIcon, UploadCloud, Lock, Layers, Monitor, RotateCcw, Archive,
-  ChevronLeft, ChevronRight, AlertCircle, Clock
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, AlertCircle, Clock
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -72,7 +72,6 @@ const compressVideo = (file, onProgress) => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // 1080p (Full HD) und Ausrichtung beachten
             let targetWidth = 1920;
             let targetHeight = 1080;
             if (video.videoWidth < video.videoHeight) {
@@ -86,7 +85,6 @@ const compressVideo = (file, onProgress) => {
 
             const stream = canvas.captureStream(30);
             
-            // 3.5 Mbps Bitrate für saubere Qualität
             const recorder = new MediaRecorder(stream, { 
                 mimeType: 'video/webm;codecs=vp9',
                 videoBitsPerSecond: 3500000 
@@ -150,7 +148,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
   const [teamProfiles, setTeamProfiles] = useState([]);
   const [materialLists, setMaterialLists] = useState([]);
   const [angebote, setAngebote] = useState([]);
-  const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [] });
+  const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [], categoryOrder: [] });
   
   // Dynamische Settings
   const [docKategorien, setDocKategorien] = useState(['Rechnungen', 'Konzepte', 'Sponsoring', 'Bilder']);
@@ -163,7 +161,18 @@ export default function AdminArea({ user, touren = [], onLogout }) {
   
   const activeAngebote = angebote.filter(a => !a.isDeleted);
   const activeAngeboteFallback = activeAngebote.length > 0 ? activeAngebote : DEFAULT_ANGEBOTE;
-  const tourKategorien = [...new Set(activeAngeboteFallback.map(a => a.title))];
+  
+  // NEU: Sortierungslogik für die Angebote
+  const categoryOrder = websiteSettings.categoryOrder || DEFAULT_ANGEBOTE.map(a => a.id);
+  const sortedAngebote = [...activeAngeboteFallback].sort((a, b) => {
+      let indexA = categoryOrder.indexOf(a.id);
+      let indexB = categoryOrder.indexOf(b.id);
+      if (indexA === -1) indexA = 999; // Neue Einträge ans Ende
+      if (indexB === -1) indexB = 999;
+      return indexA - indexB;
+  });
+  
+  const tourKategorien = [...new Set(sortedAngebote.map(a => a.title))];
 
   // UI States
   const [selectedKunde, setSelectedKunde] = useState(null);
@@ -221,7 +230,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
           fetchedLogs.sort((a, b) => b.timestamp - a.timestamp); 
           setLogs(fetchedLogs);
       }),
-      onSnapshot(doc(db, 'settings', 'website'), snap => { if(snap.exists()) setWebsiteSettings(snap.data()); }),
+      onSnapshot(doc(db, 'settings', 'website'), snap => { if(snap.exists()) setWebsiteSettings({...websiteSettings, ...snap.data()}); }),
       onSnapshot(doc(db, 'settings', 'dokumente'), snap => { 
           if (snap.exists()) {
               if (snap.data().kategorien) setDocKategorien(snap.data().kategorien); 
@@ -265,8 +274,18 @@ export default function AdminArea({ user, touren = [], onLogout }) {
       setArray(newArr);
   };
 
+  // NEU: Up/Down Sortierfunktion für Angebote
+  const moveAngebot = async (idx, dir) => {
+      const newOrder = sortedAngebote.map(a => a.id);
+      if (idx + dir < 0 || idx + dir >= newOrder.length) return;
+      const temp = newOrder[idx];
+      newOrder[idx] = newOrder[idx + dir];
+      newOrder[idx + dir] = temp;
+      await setDoc(doc(db, 'settings', 'website'), { categoryOrder: newOrder }, { merge: true });
+  };
+
   const deleteAnmeldung = async (anm, title) => {
-      if(!confirm(`Anmeldung von ${anm.vorname} ${anm.name} wirklich löschen/stornieren?`)) return;
+      if(!confirm(`Anmeldung von ${anm.vorname} ${anm.name} wirklich löschen/stornieren?\n\nHinweis: Der Kontakt bleibt im Kundenstamm gespeichert.`)) return;
       try {
           await deleteDoc(doc(db, 'anmeldungen', anm.id));
           if (!anm.isArchived && anm.tourId && !anm.tourId.startsWith('mock-')) {
@@ -961,7 +980,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
               </div>
             )}
 
-            {/* NEU: WEBSITE / HERO VIDEO ADMIN */}
+            {/* WEBSITE / HERO VIDEO ADMIN */}
             {adminSubView === 'website' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -1039,6 +1058,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                     <select name="season" defaultValue={editingAngebot.season} className="w-full border border-zinc-300 p-3 text-base mt-2 outline-none focus:border-black transition cursor-pointer bg-white">
                                         <option value="Sommer">Sommer</option>
                                         <option value="Winter">Winter</option>
+                                        <option value="Spontantouren">Spontantouren</option>
                                     </select>
                                 </div>
                             </div>
@@ -1091,9 +1111,9 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                         </form>
                     ) : (
                         <div className="space-y-4 fade-in">
-                            <p className="text-sm text-zinc-500 mb-8">Diese Angebote erscheinen direkt auf der Hauptseite. Ihre Namen fungieren gleichzeitig als Kategorien für die einzelnen Touren.</p>
+                            <p className="text-sm text-zinc-500 mb-8">Diese Angebote erscheinen direkt auf der Hauptseite. Ihre Namen fungieren gleichzeitig als Kategorien für die einzelnen Touren. <b>Hier kannst du ihre Reihenfolge festlegen.</b></p>
                             
-                            {activeAngeboteFallback.map((angebot, i) => (
+                            {sortedAngebote.map((angebot, i) => (
                                 <div key={angebot.id || i} className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-5 md:p-6 border border-zinc-200 bg-white hover:border-black transition group">
                                     <div className="flex items-center gap-6">
                                         <div className="w-16 h-12 overflow-hidden bg-zinc-100 flex-shrink-0">
@@ -1107,6 +1127,10 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-4 sm:gap-6 items-center opacity-100 md:opacity-70 group-hover:opacity-100 transition pt-2 sm:pt-0 border-t sm:border-0 border-zinc-100">
+                                        <div className="flex gap-1 border-r border-zinc-300 pr-4 mr-2">
+                                            <button onClick={() => moveAngebot(i, -1)} disabled={i === 0} className={`p-1 rounded-sm transition ${i === 0 ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 hover:text-black hover:bg-zinc-100'}`}><ChevronUp size={16}/></button>
+                                            <button onClick={() => moveAngebot(i, 1)} disabled={i === sortedAngebote.length - 1} className={`p-1 rounded-sm transition ${i === sortedAngebote.length - 1 ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 hover:text-black hover:bg-zinc-100'}`}><ChevronDown size={16}/></button>
+                                        </div>
                                         <button onClick={() => { setEditingAngebot({...angebot, images: angebot.images || (angebot.image ? [angebot.image] : [])}); setPendingDeletes([]); }} className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 hover:text-black flex items-center gap-2"><Edit size={14}/> Bearbeiten</button>
                                         <button onClick={() => softDelete('angebote', angebot.id, angebot.title)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 flex items-center gap-2"><Trash2 size={14}/> Löschen</button>
                                     </div>
@@ -1353,9 +1377,23 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                                         {!isEditingKunde && currentKunde.stammkunde_von && <span className="inline-block mt-2 text-[9px] uppercase tracking-widest bg-zinc-100 font-bold px-2 py-1">Stammkunde von {currentKunde.stammkunde_von}</span>}
                                                         {currentKunde.isNew && <span className="inline-block mt-2 text-[9px] uppercase tracking-widest bg-blue-100 text-blue-700 font-bold px-2 py-1">Neue Erfassung</span>}
                                                     </div>
-                                                    <button onClick={() => setIsEditingKunde(!isEditingKunde)} className={`p-2 rounded-full self-start transition ${isEditingKunde ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>
-                                                        {isEditingKunde ? <X size={16}/> : <Edit size={16}/>}
-                                                    </button>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => setIsEditingKunde(!isEditingKunde)} className={`p-2 rounded-full self-start transition ${isEditingKunde ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>
+                                                            {isEditingKunde ? <X size={16}/> : <Edit size={16}/>}
+                                                        </button>
+                                                        {/* NEUER LÖSCHEN BUTTON */}
+                                                        {!currentKunde.isNew && (
+                                                            <button onClick={async () => {
+                                                                if(confirm(`Willst du die Adresse von ${currentKunde.vorname} ${currentKunde.name} unwiderruflich aus dem CRM löschen?\n\nHinweis: Bestehende Anmeldungen oder Anfragen bleiben erhalten, aber die zentrale Kundenkartei wird gelöscht.`)) {
+                                                                    await deleteDoc(doc(db, 'kunden_notizen', currentKunde.email));
+                                                                    logAction(`Kunde aus CRM gelöscht: ${currentKunde.email}`);
+                                                                    setSelectedKunde(null);
+                                                                }
+                                                            }} className="p-2 rounded-full self-start transition bg-red-50 text-red-500 hover:bg-red-500 hover:text-white" title="Kunde löschen">
+                                                                <Trash2 size={16}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 {isEditingKunde ? (
@@ -1491,6 +1529,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                 </div>
             )}
 
+            {/* ANFRAGEN ADMIN */}
             {adminSubView === 'anfragen' && (
                 <div className="fade-in max-w-5xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -1571,6 +1610,7 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                 </div>
             )}
 
+            {/* TOUREN ADMIN */}
             {adminSubView === 'touren' && (
                 <div className="fade-in max-w-6xl mx-auto w-full">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
