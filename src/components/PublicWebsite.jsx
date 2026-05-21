@@ -1050,22 +1050,39 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
                                             </div>
 
-                                            {/* NEU: Anforderungen direkt anzeigen (besonders wichtig für Beispieltouren) */}
-                                            {selectedTour.anforderungen && (
-                                                <div>
-                                                    <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Anforderungen</h3>
-                                                    <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line">{selectedTour.anforderungen}</p>
+                                            {selectedTour.isExample ? (
+                                                <div className="space-y-8 mt-8 border-t border-zinc-100 pt-8">
+                                                    {selectedTour.anforderungen && (
+                                                        <div>
+                                                            <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Anforderungen</h3>
+                                                            <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line">{selectedTour.anforderungen}</p>
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Level</h3>
+                                                        <div className="flex flex-col sm:flex-row gap-8">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-[9px] uppercase tracking-widest font-bold text-black w-16">Technik</span>
+                                                                <div className="flex gap-1.5">
+                                                                    {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getTech(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-[9px] uppercase tracking-widest font-bold text-black w-16">Ausdauer</span>
+                                                                <div className="flex gap-1.5">
+                                                                    {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getAusd(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            )}
-
-                                            <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
-                                                {(!selectedTour.isExample || selectedTour.date) && (
+                                            ) : (
+                                                <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
                                                     <Accordion title="Datum & Durchführung">
                                                         <div className="text-zinc-600 font-light text-sm pb-2">
                                                             <div className="flex items-center gap-2 mb-3 flex-wrap">
                                                                 <span className="text-sm">{selectedTour.date || 'Auf Anfrage'}</span>
-                                                                {/* MIN TEILNEHMER BADGE */}
-                                                                {!selectedTour.isExample && selectedTour.minPlaetze > 0 && (
+                                                                {selectedTour.minPlaetze > 0 && (
                                                                     selectedTour.angemeldet >= selectedTour.minPlaetze ? (
                                                                         <span className="text-[9px] bg-green-100 text-green-700 px-2 py-1 uppercase tracking-widest font-bold ml-2 block sm:inline-block mt-2 sm:mt-0">Definitive Durchführung gesichert</span>
                                                                     ) : (
@@ -1091,33 +1108,38 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                             )}
                                                         </div>
                                                     </Accordion>
-                                                )}
 
-                                                {!selectedTour.isExample && <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />}
+                                                    <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />
 
-                                                <Accordion title="Level (Technik & Ausdauer)">
-                                                    <div className="pb-4 space-y-6">
-                                                        <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
-                                                            <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                                                <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
-                                                                    <span className="text-[9px] uppercase tracking-widest font-bold text-black">Technik</span>
-                                                                    <div className="flex gap-1">
-                                                                        {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getTech(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
+                                                    <Accordion title="Anforderungen & Level">
+                                                        <div className="pb-4 space-y-6">
+                                                            <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
+                                                                <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                                                                    <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
+                                                                        <span className="text-[9px] uppercase tracking-widest font-bold text-black">Technik</span>
+                                                                        <div className="flex gap-1">
+                                                                            {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getTech(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                                                                    <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
+                                                                        <span className="text-[9px] uppercase tracking-widest font-bold text-black">Ausdauer</span>
+                                                                        <div className="flex gap-1">
+                                                                            {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getAusd(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                                                <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
-                                                                    <span className="text-[9px] uppercase tracking-widest font-bold text-black">Ausdauer</span>
-                                                                    <div className="flex gap-1">
-                                                                        {[1, 2, 3].map(i => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= getAusd(selectedTour) ? 'bg-black' : 'bg-zinc-200'}`}></div>)}
-                                                                    </div>
+                                                            {selectedTour.anforderungen && (
+                                                                <div className="pt-4 border-t border-zinc-100">
+                                                                    <p className="text-zinc-600 font-light text-sm whitespace-pre-line">{selectedTour.anforderungen}</p>
                                                                 </div>
-                                                            </div>
+                                                            )}
                                                         </div>
-                                                    </div>
-                                                </Accordion>
-                                            </div>
+                                                    </Accordion>
+                                                </div>
+                                            )}
 
                                             {!selectedTour.isExample && (
                                                 <div className="grid md:grid-cols-2 gap-6 pt-4">
