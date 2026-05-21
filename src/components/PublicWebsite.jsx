@@ -801,7 +801,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
                     <div className="p-6 md:p-12 max-w-7xl mx-auto w-full">
                         <div className="text-center max-w-3xl mx-auto mb-12">
-                            <p className="text-sm text-zinc-600 leading-relaxed">Hier findest du eine Auswahl an Klassikern und Traumtouren, die wir nicht im festen Programm haben, aber <b>jederzeit auf Anfrage</b> für dich organisieren können.</p>
+                            <p className="text-sm text-zinc-600 leading-relaxed">Hier findest du eine kleine Auswahl an Klassikern und Traumtouren, die wir jederzeit auf Anfrage für dich organisieren können.</p>
                         </div>
 
                         {filteredExampleTours.length > 0 ? (
@@ -879,40 +879,49 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 {bookingStatus ? ( <div className="text-center py-12 serif italic text-xl flex-1 flex flex-col items-center justify-center"><div className="text-4xl mb-6">✓</div>{bookingStatus}</div> ) : (
                                     <div className="space-y-10 flex-1 flex flex-col">
                                         <p className="text-zinc-600 text-base leading-relaxed font-light">{selectedAngebot.longDesc}</p>
-                                        
-                                        <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
-                                            <h3 className="serif text-2xl italic mb-3">Benötigst du Ideen?</h3>
-                                            <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
-                                            <button onClick={() => { 
-                                                setSelectedAngebot(null); 
-                                                setFilterKategorie('Alle');
-                                                setIsIdeenBoardOpen(true); 
-                                            }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
-                                                Zu den Touren-Ideen
-                                            </button>
-                                        </div>
 
                                         {selectedAngebot.season === 'Spontantouren' ? (
-                                            <form onSubmit={handleSpontanNewsletter} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
-                                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Anmeldung für News & Spontantouren:</h4>
-                                                <div className="grid grid-cols-2 gap-6">
-                                                    <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                    <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                </div>
-                                                <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                <button type="submit" disabled={isSubmitting} className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">{isSubmitting ? 'Wird gesendet...' : 'Für News anmelden'}</button>
-                                            </form>
+                                            <div className="bg-[#fdfcf9] p-6 md:p-8 border border-amber-100 flex flex-col mt-6 shadow-sm">
+                                                <h3 className="serif text-2xl italic mb-3 text-amber-900">Bist du spontan?</h3>
+                                                <p className="text-xs text-zinc-600 mb-6 leading-relaxed">
+                                                    Unsere kurzfristigen Spontantouren werden direkt unter den <button onClick={() => { setSelectedAngebot(null); setIsAllToursModalOpen(true); }} className="underline font-bold text-amber-700 hover:text-black transition">aktuellen Touren</button> ausgeschrieben.
+                                                    <br/><br/>
+                                                    Willst du als Erste/r davon erfahren? Trag dich unten für die E-Mail-Benachrichtigung ein!
+                                                </p>
+                                                <form onSubmit={handleSpontanNewsletter} className="space-y-4 border-t border-amber-100 pt-6">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <input name="vorname" placeholder="VORNAME" required className="border-b border-amber-200 p-2 text-xs outline-none focus:border-amber-500 transition-colors bg-transparent" />
+                                                        <input name="name" placeholder="NAME" required className="border-b border-amber-200 p-2 text-xs outline-none focus:border-amber-500 transition-colors bg-transparent" />
+                                                    </div>
+                                                    <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b border-amber-200 p-2 text-xs outline-none focus:border-amber-500 transition-colors bg-transparent" />
+                                                    <button type="submit" disabled={isSubmitting} className="w-full bg-black text-white py-4 mt-2 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-md">{isSubmitting ? 'Wird gesendet...' : 'Für Benachrichtigung eintragen'}</button>
+                                                </form>
+                                            </div>
                                         ) : (
-                                            <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
-                                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Oder direkt eine Anfrage senden:</h4>
-                                                <div className="grid grid-cols-2 gap-6">
-                                                    <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                    <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                            <>
+                                                <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
+                                                    <h3 className="serif text-2xl italic mb-3">Benötigst du Ideen?</h3>
+                                                    <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
+                                                    <button onClick={() => { 
+                                                        setSelectedAngebot(null); 
+                                                        setFilterKategorie('Alle');
+                                                        setIsIdeenBoardOpen(true); 
+                                                    }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
+                                                        Zu den Touren-Ideen
+                                                    </button>
                                                 </div>
-                                                <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
-                                                <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent h-28 resize-y" />
-                                                <button type="submit" className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">Anfrage Senden</button>
-                                            </form>
+
+                                                <form onSubmit={handleAnfrage} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
+                                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Oder direkt eine Anfrage senden:</h4>
+                                                    <div className="grid grid-cols-2 gap-6">
+                                                        <input name="vorname" placeholder="VORNAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                        <input name="name" placeholder="NAME" required className="border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                    </div>
+                                                    <input name="email" type="email" placeholder="EMAIL" required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent" />
+                                                    <textarea name="nachricht" placeholder="DEINE NACHRICHT..." required className="w-full border-b p-2 text-xs outline-none focus:border-black transition-colors bg-transparent h-28 resize-y" />
+                                                    <button type="submit" className="w-full bg-black text-white py-5 text-[9px] font-bold uppercase tracking-[0.4em] hover:bg-zinc-800 transition-all shadow-xl">Anfrage Senden</button>
+                                                </form>
+                                            </>
                                         )}
                                     </div>
                                 )}
@@ -1041,6 +1050,14 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
                                             </div>
 
+                                            {/* NEU: Anforderungen direkt anzeigen (besonders wichtig für Beispieltouren) */}
+                                            {selectedTour.anforderungen && (
+                                                <div>
+                                                    <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Anforderungen</h3>
+                                                    <p className="text-zinc-600 leading-relaxed font-light text-sm whitespace-pre-line">{selectedTour.anforderungen}</p>
+                                                </div>
+                                            )}
+
                                             <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
                                                 {(!selectedTour.isExample || selectedTour.date) && (
                                                     <Accordion title="Datum & Durchführung">
@@ -1078,7 +1095,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
                                                 {!selectedTour.isExample && <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />}
 
-                                                <Accordion title="Anforderungen & Level">
+                                                <Accordion title="Level (Technik & Ausdauer)">
                                                     <div className="pb-4 space-y-6">
                                                         <div className="space-y-4 text-xs text-zinc-500 font-light leading-relaxed">
                                                             <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
@@ -1098,11 +1115,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        {selectedTour.anforderungen && (
-                                                            <div className="pt-4 border-t border-zinc-100">
-                                                                <p className="text-zinc-600 font-light text-sm whitespace-pre-line">{selectedTour.anforderungen}</p>
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </Accordion>
                                             </div>
