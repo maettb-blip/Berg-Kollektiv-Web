@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp, onSnapshot, setDoc } from "firebase/firestore";
-import { FileText, Tag, Filter, Search, Info, Hand } from 'lucide-react';
+import { FileText, Tag, Filter, Search, Info, Hand, X, ChevronLeft, ChevronRight, Mail, ArrowRight } from 'lucide-react';
 
 // ==========================================
 // FIREBASE KONFIGURATION
@@ -54,6 +54,17 @@ const getKat = (t, defaultCats) => {
 const getTech = (t) => t.technik ? Number(t.technik) : 2;
 const getAusd = (t) => t.ausdauer ? Number(t.ausdauer) : 2;
 
+const techDetails = {
+    1: "Wenig bis mässig steiles Gelände. Tritte und Griffe sind gut vorhanden. Basiskenntnisse genügen.",
+    2: "Steileres Gelände, teilweise ausgesetzt. Sicheres Steigen und grundlegende Seiltechnik erforderlich.",
+    3: "Sehr steiles, anspruchsvolles Gelände. Sehr gute Klettertechnik, absolute Trittsicherheit und Schwindelfreiheit obligatorisch."
+};
+const ausdDetails = {
+    1: "Kurze Etappen (3-5 Stunden). Gemütliches Tempo, wenig Höhenmeter (bis ca. 800m).",
+    2: "Mittlere Etappen (5-7 Stunden). Moderates Tempo, mittlere Höhenmeter (ca. 800-1200m).",
+    3: "Lange, anstrengende Etappen (ab 7 Stunden). Hohes Tempo, viele Höhenmeter (über 1200m)."
+};
+
 const DifficultyDots = ({ label, level, info }) => (
     <div className="flex items-center gap-2 relative group/tooltip" title={info}>
         <span className="text-[9px] uppercase tracking-widest text-zinc-500 w-16">{label}</span>
@@ -100,7 +111,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [teamAttributes, setTeamAttributes] = useState([]);
     const [angebote, setAngebote] = useState([]);
     
-    // Vereinte Deklaration von websiteSettings
+    // Settings
     const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [], categoryOrder: [], tabOrder: ['Sommer', 'Winter', 'Spontantouren'] });
     const [angebotTab, setAngebotTab] = useState('Sommer');
 
@@ -263,7 +274,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         const data = {
             thema: thema,
             vorname, name, email,
-            nachricht: fd.get('nachricht'), timestamp: serverTimestamp()
+            nachricht: fd.get('nachricht'), timestamp: serverTimestamp(),
+            status: 'Neu / Offen'
         };
 
         try {
@@ -290,6 +302,16 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
         try {
             await saveCustomerData(email, { email: email.toLowerCase().trim(), vorname, name, newsletter: true });
+            
+            const anfrageData = {
+                thema: 'Newsletter & Spontantouren Anmeldung',
+                vorname, name, email,
+                nachricht: 'Kunde möchte für den Newsletter bzw. für Spontantouren eingeschrieben werden.',
+                timestamp: serverTimestamp(),
+                status: 'Geantwortet'
+            };
+            await addDoc(collection(db, 'anfragen'), anfrageData);
+
             setBookingStatus("Erfolgreich für News & Spontantouren eingetragen!");
             setTimeout(() => { setSelectedAngebot(null); setBookingStatus(null); setIsSubmitting(false); }, 3000);
         } catch(err) {
@@ -311,7 +333,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
         const data = {
             thema: `Idee: ${selectedTour.title}`,
             vorname, name, email,
-            nachricht: fd.get('nachricht'), timestamp: serverTimestamp()
+            nachricht: fd.get('nachricht'), timestamp: serverTimestamp(),
+            status: 'Neu / Offen'
         };
 
         try {
@@ -447,7 +470,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 z-0 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}>
                         <span className="text-xs md:text-sm uppercase tracking-[0.4em] text-zinc-300 font-bold">Berg Kollektiv</span>
                     </div>
-                    {/* VIDEO WIRD NUN DYNAMISCH GELADEN */}
                     <video key={activeHeroVideo} autoPlay muted loop playsInline preload="auto" onCanPlay={() => setIsVideoLoaded(true)} onLoadedData={() => setIsVideoLoaded(true)} className={`absolute inset-0 w-full h-full object-cover grayscale transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-60' : 'opacity-0'}`}>
                         <source src={activeHeroVideo} type="video/mp4" />
                     </video>
@@ -549,30 +571,36 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     </div>
                 </section>
 
-                <footer id="kontakt" className="py-32 md:py-48 bg-[#f9f9f7] border-t border-zinc-100 px-6">
+                <footer id="kontakt" className="py-32 md:py-40 bg-[#fdfdfc] border-t border-zinc-100 px-6">
                     <div className="max-w-7xl mx-auto flex flex-col items-center">
-                        <p className="uppercase tracking-[0.5em] text-[10px] mb-12 opacity-50 text-center">Kontaktiere uns</p>
-                        <a href="mailto:hallo@bergkollektiv.ch" className="serif text-3xl md:text-6xl italic hover:text-zinc-400 transition-colors duration-500 block text-center mb-20">hallo@bergkollektiv.ch</a>
-                        <div className="w-full grid md:grid-cols-3 gap-12 items-center">
-                            <div className="flex flex-col items-center md:items-start space-y-6">
-                                <a href="https://www.instagram.com/" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
-                                    <Instagram size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Instagram</span>
+                        <p className="uppercase tracking-[0.5em] text-[10px] mb-12 text-zinc-400 font-bold text-center">Kontaktiere uns</p>
+                        <a href="mailto:hallo@bergkollektiv.ch" className="serif text-4xl md:text-6xl lg:text-7xl italic hover:text-zinc-400 transition-colors duration-500 block text-center mb-32">hallo@bergkollektiv.ch</a>
+                        
+                        <div className="w-full flex flex-col md:flex-row justify-between items-center md:items-start gap-16 md:gap-8">
+                            <div className="flex flex-col items-center md:items-start space-y-6 flex-1 w-full md:w-auto text-left">
+                                <a href="https://www.instagram.com/" target="_blank" rel="noreferrer" className="flex items-center gap-4 group text-black w-full justify-center md:justify-start">
+                                    <Instagram size={20} strokeWidth={1.5} /> 
+                                    <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black transition-colors">Instagram</span>
                                 </a>
-                                <a href="/agb.pdf" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
-                                    <FileText size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Allgemeine Geschäftsbedingungen</span>
+                                <a href="/agb.pdf" target="_blank" rel="noreferrer" className="flex items-center gap-4 group text-black w-full justify-center md:justify-start">
+                                    <FileText size={20} strokeWidth={1.5} /> 
+                                    <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black transition-colors">Allgemeine Geschäftsbedingungen</span>
                                 </a>
-                                <a href="/tarife.pdf" target="_blank" rel="noreferrer" className="footer-icon-link flex items-center gap-4 group">
-                                    <Tag size={20} /> <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black">Allgemeine Tarife</span>
+                                <a href="/tarife.pdf" target="_blank" rel="noreferrer" className="flex items-center gap-4 group text-black w-full justify-center md:justify-start">
+                                    <Tag size={20} strokeWidth={1.5} /> 
+                                    <span className="text-[9px] uppercase tracking-widest font-bold border-b border-transparent group-hover:border-black transition-colors">Allgemeine Tarife</span>
                                 </a>
                             </div>
-                            <div className="flex flex-col items-center space-y-4">
-                                <img src="/Logo IVBV negativ.svg" alt="IVBV Logo" loading="lazy" decoding="async" className="h-20 w-auto object-contain grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-500" />
-                                <p className="text-[8px] uppercase tracking-[0.3em] text-zinc-400 text-center">Internationaler Verband der<br/>Bergführervereinigungen</p>
+
+                            <div className="flex flex-col items-center space-y-4 flex-1">
+                                <img src="/Logo IVBV negativ.svg" alt="IVBV Logo" loading="lazy" decoding="async" className="h-20 w-20 object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-500" />
+                                <p className="text-[8px] uppercase tracking-[0.3em] text-zinc-400 text-center leading-loose">Internationaler Verband der<br/>Bergführervereinigungen</p>
                             </div>
-                            <div className="flex flex-col items-center md:items-end text-center md:text-right space-y-2">
-                                <div className="text-lg tracking-[0.3em] uppercase mb-4">BERG <span className="font-bold">KOLLEKTIV</span></div>
-                                <p className="text-[8px] uppercase tracking-widest text-zinc-400">&copy; 2026 Berg Kollektiv<br/>Alle Rechte vorbehalten.</p>
-                                <button onClick={() => { onGoToAdmin && onGoToAdmin(); window.scrollTo(0,0); }} className="mt-6 text-[8px] uppercase tracking-[0.2em] text-zinc-300 hover:text-black transition-colors md:hidden">— Admin Login —</button>
+
+                            <div className="flex flex-col items-center md:items-end text-center md:text-right space-y-4 flex-1 pt-4">
+                                <div className="text-xl tracking-[0.3em] uppercase">BERG <span className="font-bold">KOLLEKTIV</span></div>
+                                <p className="text-[8px] uppercase tracking-widest text-zinc-400 leading-loose">&copy; {new Date().getFullYear()} Berg Kollektiv<br/>Alle Rechte vorbehalten.</p>
+                                <button onClick={() => { onGoToAdmin && onGoToAdmin(); window.scrollTo(0,0); }} className="mt-4 text-[8px] uppercase tracking-[0.2em] text-zinc-300 hover:text-black transition-colors">— Admin Login —</button>
                             </div>
                         </div>
                     </div>
@@ -592,19 +620,19 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     
                     <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
                         <div className="max-w-7xl mx-auto">
-                            <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
-                                <div className="flex flex-col sm:flex-row gap-6">
+                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 sm:gap-12 w-full lg:w-auto">
                                     <div className="flex items-center gap-3">
-                                        <Filter size={16} className="text-zinc-400" />
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
-                                        <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                        <Filter size={14} className="text-zinc-400" />
+                                        <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
+                                        <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="bg-transparent text-xs font-bold uppercase tracking-widest outline-none cursor-pointer hover:text-black transition-colors">
                                             <option value="Alle">Alle Kategorien</option>
                                             {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
                                         </select>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
-                                        <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                        <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
+                                        <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="bg-transparent text-xs font-bold uppercase tracking-widest outline-none cursor-pointer hover:text-black transition-colors">
                                             <option value="Alle">Alle Level</option>
                                             <option value="1">1 - Einfach</option>
                                             <option value="2">2 - Mittel</option>
@@ -612,8 +640,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                         </select>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
-                                        <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                        <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
+                                        <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="bg-transparent text-xs font-bold uppercase tracking-widest outline-none cursor-pointer hover:text-black transition-colors">
                                             <option value="Alle">Alle Level</option>
                                             <option value="1">1 - Einfach</option>
                                             <option value="2">2 - Mittel</option>
@@ -624,7 +652,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 
                                 <button 
                                     onClick={() => setShowLevelInfo(!showLevelInfo)} 
-                                    className={`flex items-center gap-2 px-4 py-2 border transition-colors text-[10px] uppercase tracking-widest font-bold ${showLevelInfo ? 'bg-black text-white border-black' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100 hover:text-black'}`}
+                                    className={`flex items-center gap-2 px-4 py-2 border transition-colors text-[9px] uppercase tracking-widest font-bold w-full lg:w-auto justify-center mt-4 lg:mt-0 ${showLevelInfo ? 'bg-black text-white border-black' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100 hover:text-black'}`}
                                 >
                                     <Info size={14} /> Info Technik & Ausdauer
                                 </button>
@@ -707,28 +735,28 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     
                     <div className="p-6 md:px-12 md:py-8 bg-white border-b border-zinc-200">
                         <div className="max-w-7xl mx-auto">
-                            <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-center">
-                                <div className="flex flex-col sm:flex-row gap-6 w-full">
-                                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                                        <Filter size={16} className="text-zinc-400 flex-shrink-0" />
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
-                                        <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
-                                            <option value="Alle">Alle Kategorien</option>
+                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 sm:gap-12 w-full lg:w-auto">
+                                    <div className="flex items-center gap-3">
+                                        <Filter size={14} className="text-zinc-400" />
+                                        <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Kategorie</span>
+                                        <select value={filterKategorie} onChange={e => setFilterKategorie(e.target.value)} className="bg-transparent text-xs font-bold uppercase tracking-widest outline-none cursor-pointer hover:text-black transition-colors">
+                                            <option value="Alle">Alle Ideen anzeigen</option>
                                             {tourKategorien.map(kat => <option key={kat} value={kat}>{kat}</option>)}
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
-                                        <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Technik</span>
+                                        <select value={filterTechnik} onChange={e => setFilterTechnik(e.target.value)} className="bg-transparent text-xs font-bold uppercase tracking-widest outline-none cursor-pointer hover:text-black transition-colors">
                                             <option value="Alle">Alle Level</option>
                                             <option value="1">1 - Einfach</option>
                                             <option value="2">2 - Mittel</option>
                                             <option value="3">3 - Schwer</option>
                                         </select>
                                     </div>
-                                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
-                                        <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="w-full sm:w-auto border-b border-zinc-300 py-2 text-xs outline-none bg-transparent cursor-pointer font-medium focus:border-black">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Ausdauer</span>
+                                        <select value={filterAusdauer} onChange={e => setFilterAusdauer(e.target.value)} className="bg-transparent text-xs font-bold uppercase tracking-widest outline-none cursor-pointer hover:text-black transition-colors">
                                             <option value="Alle">Alle Level</option>
                                             <option value="1">1 - Einfach</option>
                                             <option value="2">2 - Mittel</option>
@@ -739,7 +767,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 
                                 <button 
                                     onClick={() => setShowLevelInfo(!showLevelInfo)} 
-                                    className={`flex items-center gap-2 px-4 py-2 border transition-colors text-[10px] uppercase tracking-widest font-bold w-full lg:w-auto justify-center mt-4 lg:mt-0 ${showLevelInfo ? 'bg-black text-white border-black' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100 hover:text-black'}`}
+                                    className={`flex items-center gap-2 px-4 py-2 border transition-colors text-[9px] uppercase tracking-widest font-bold w-full lg:w-auto justify-center mt-4 lg:mt-0 ${showLevelInfo ? 'bg-black text-white border-black' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100 hover:text-black'}`}
                                 >
                                     <Info size={14} /> Info Technik & Ausdauer
                                 </button>
@@ -772,10 +800,14 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                     </div>
 
                     <div className="p-6 md:p-12 max-w-7xl mx-auto w-full">
+                        <div className="text-center max-w-3xl mx-auto mb-12">
+                            <p className="text-sm text-zinc-600 leading-relaxed">Hier findest du eine Auswahl an Klassikern und Traumtouren, die wir nicht im festen Programm haben, aber <b>jederzeit auf Anfrage</b> für dich organisieren können.</p>
+                        </div>
+
                         {filteredExampleTours.length > 0 ? (
                             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
                                 {filteredExampleTours.map(tour => (
-                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
+                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(true); }}>
                                         <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
                                             <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
                                             <div className="absolute top-4 left-4 bg-black text-white px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
@@ -783,8 +815,10 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             </div>
                                         </div>
                                         <div>
+                                            <span className="text-[8px] uppercase tracking-widest bg-zinc-100 text-zinc-500 px-2 py-1 mb-3 inline-block">Auf Anfrage</span>
                                             <h3 className="text-xl font-medium mb-4 uppercase">{tour.title}</h3>
-                                            <div className="flex justify-end items-end border-t border-zinc-100 pt-4 mt-4">
+                                            <div className="flex justify-between items-end border-t border-zinc-100 pt-4 mt-4">
+                                                <p className="text-[10px] uppercase tracking-widest text-black font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Anfragen <ArrowRight size={12}/></p>
                                                 <div className="flex flex-col gap-1.5 items-end">
                                                     <DifficultyDots label="Technik" level={getTech(tour)} />
                                                     <DifficultyDots label="Ausdauer" level={getAusd(tour)} />
@@ -804,7 +838,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                MODAL FÜR ANGEBOTE
+                MODAL FÜR ANGEBOTE (Split-Screen)
                ========================================= */}
             {selectedAngebot && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
@@ -859,33 +893,6 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                         </div>
 
                                         {selectedAngebot.season === 'Spontantouren' ? (
-                                            <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
-                                                <h3 className="serif text-2xl italic mb-3">Bist du spontan?</h3>
-                                                <p className="text-xs text-zinc-500 mb-6">
-                                                    Aktuelle Spontantouren werden aufgrund der Bedingungen meist kurzfristig direkt bei unseren <a href="#touren" onClick={() => setSelectedAngebot(null)} className="underline hover:text-black font-bold">Aktuellen Touren</a> ausgeschrieben. Schau dort vorbei oder trage dich unten für den Newsletter ein, um immer als Erstes per E-Mail informiert zu werden!
-                                                </p>
-                                                <button onClick={() => { 
-                                                    setSelectedAngebot(null); 
-                                                    document.getElementById('touren')?.scrollIntoView({ behavior: 'smooth' });
-                                                }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
-                                                    Zu den aktuellen Touren
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="bg-[#f9f9f7] p-6 md:p-8 border border-zinc-100 flex flex-col items-center text-center mt-6">
-                                                <h3 className="serif text-2xl italic mb-3">Benötigst du Ideen?</h3>
-                                                <p className="text-xs text-zinc-500 mb-6">Lass dich von unseren Tourenvorschlägen im Bereich {selectedAngebot.title} inspirieren.</p>
-                                                <button onClick={() => { 
-                                                    setSelectedAngebot(null); 
-                                                    setFilterKategorie('Alle');
-                                                    setIsIdeenBoardOpen(true); 
-                                                }} className="border border-black px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all w-full">
-                                                    Zu den Touren-Ideen
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {selectedAngebot.season === 'Spontantouren' ? (
                                             <form onSubmit={handleSpontanNewsletter} className="space-y-6 pt-8 border-t border-zinc-100 mt-auto">
                                                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4">Anmeldung für News & Spontantouren:</h4>
                                                 <div className="grid grid-cols-2 gap-6">
@@ -916,7 +923,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                MODAL FÜR BERGFÜHRER
+                MODAL FÜR BERGFÜHRER (Split-Screen)
                ========================================= */}
             {selectedTeamMember && (
                 <div className="fixed inset-0 z-[300] flex items-center justify-center md:p-8">
@@ -977,7 +984,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
             )}
 
             {/* =========================================
-                GROSSES TOUR DETAIL MODAL
+                GROSSES TOUR DETAIL MODAL (Split-Screen)
                ========================================= */}
             {selectedTour && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center md:p-8">
@@ -987,7 +994,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         
                         <div className="w-full md:w-1/2 h-[60vh] md:h-full relative flex-shrink-0 bg-black group flex flex-col">
                             
-                            {/* Main Detail Image Slider (100% breite, kein Wisch-Hinweis) */}
+                            {/* Main Detail Image Slider */}
                             <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory hide-scrollbar z-10 scroll-smooth">
                                 {(selectedTour.images || [selectedTour.image]).map((img, idx) => (
                                     <div
