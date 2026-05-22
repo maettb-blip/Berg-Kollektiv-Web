@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp, onSnapshot, setDoc } from "firebase/firestore";
-import { FileText, Tag, Filter, Search, Info, Hand, X, ChevronLeft, ChevronRight, Mail, ArrowRight } from 'lucide-react';
+import { FileText, Tag, Filter, Search, Info, Hand, X, ChevronLeft, ChevronRight, Instagram, ArrowRight } from 'lucide-react';
 
 // ==========================================
 // FIREBASE KONFIGURATION
@@ -30,10 +30,6 @@ const loadEmailJS = () => new Promise((resolve, reject) => {
     script.onerror = reject;
     document.head.appendChild(script);
 });
-
-const Instagram = (props) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-);
 
 const DEFAULT_ANGEBOTE = [
     { id: "mock-s1", title: "Hochtouren", season: "Sommer", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen.", image: "/hochtour.jpg" },
@@ -719,6 +715,12 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                 <button onClick={() => { setFilterKategorie('Alle'); setFilterTechnik('Alle'); setFilterAusdauer('Alle'); }} className="mt-8 border-b border-black text-black text-[10px] uppercase tracking-widest pb-1 hover:text-zinc-500 transition-colors">Filter zurücksetzen</button>
                             </div>
                         )}
+
+                        <div className="mt-20 pt-12 border-t border-zinc-200 text-center">
+                            <h3 className="serif text-2xl italic mb-4">Nichts passendes dabei?</h3>
+                            <p className="text-sm text-zinc-500 mb-8 max-w-lg mx-auto">Schau doch mal in unserem Ideenboard vorbei. Dort findest du Inspiration für Touren, die wir auf Anfrage für dich organisieren können.</p>
+                            <button onClick={() => { setIsAllToursModalOpen(false); setIsIdeenBoardOpen(true); }} className="border border-black px-12 py-4 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-black hover:text-white transition-all inline-block">Zum Ideenboard</button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -807,7 +809,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         {filteredExampleTours.length > 0 ? (
                             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
                                 {filteredExampleTours.map(tour => (
-                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(true); }}>
+                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
                                         <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
                                             <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
                                             <div className="absolute top-4 left-4 bg-black text-white px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
@@ -1045,11 +1047,56 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                     <div className="fade-in space-y-12 flex-1 flex flex-col">
 
                                         <div className="space-y-8 flex-1">
+                                            {/* NEU: INFO LEISTE (nur für Aktuelle Touren) */}
+                                            {!selectedTour.isExample && (
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pb-8 border-b border-zinc-100">
+                                                    <div>
+                                                        <p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1">Datum</p>
+                                                        <p className="font-medium text-sm">{selectedTour.date || 'Auf Anfrage'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1">Preis</p>
+                                                        <p className="font-medium text-sm">{selectedTour.price || 'Auf Anfrage'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1">Anmeldungen</p>
+                                                        <div className="font-medium text-sm">
+                                                            {selectedTour.angemeldet || 0} / {selectedTour.maxPlaetze}
+                                                            {selectedTour.minPlaetze > 0 && (
+                                                                <span className="block text-[10px] mt-1 font-normal text-zinc-500">
+                                                                    {selectedTour.angemeldet >= selectedTour.minPlaetze ? (
+                                                                        <span className="text-green-600 font-bold">✓ Durchführung gesichert</span>
+                                                                    ) : (
+                                                                        <span className="text-amber-600">Noch {selectedTour.minPlaetze - (selectedTour.angemeldet || 0)} bis Min.</span>
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {selectedTour.guide && (
+                                                        <div>
+                                                            <p className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1">Guide</p>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const guideProfile = teamProfiles.find(p => p.name === selectedTour.guide);
+                                                                    if (guideProfile) setSelectedTeamMember(guideProfile);
+                                                                }}
+                                                                className="font-medium text-sm underline hover:text-black text-zinc-600 transition-colors text-left"
+                                                            >
+                                                                {selectedTour.guide}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             <div>
                                                 <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] mb-4 pb-2 border-b border-zinc-100 text-zinc-400">Beschreibung</h3>
                                                 <p className="text-zinc-600 leading-relaxed font-light text-base whitespace-pre-line">{selectedTour.description}</p>
                                             </div>
 
+                                            {/* ANSICHT BEISPIELTOUREN / IDEEN (Einfach: Anforderungen offen) */}
                                             {selectedTour.isExample ? (
                                                 <div className="space-y-8 mt-8 border-t border-zinc-100 pt-8">
                                                     {selectedTour.anforderungen && (
@@ -1077,38 +1124,8 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                     </div>
                                                 </div>
                                             ) : (
+                                                /* ANSICHT AKTUELLE TOUREN (Kompakt: Alles im Accordion) */
                                                 <div className="space-y-0 mt-8 border-t border-zinc-100 pt-4">
-                                                    <Accordion title="Datum & Durchführung">
-                                                        <div className="text-zinc-600 font-light text-sm pb-2">
-                                                            <div className="flex items-center gap-2 mb-3 flex-wrap">
-                                                                <span className="text-sm">{selectedTour.date || 'Auf Anfrage'}</span>
-                                                                {selectedTour.minPlaetze > 0 && (
-                                                                    selectedTour.angemeldet >= selectedTour.minPlaetze ? (
-                                                                        <span className="text-[9px] bg-green-100 text-green-700 px-2 py-1 uppercase tracking-widest font-bold ml-2 block sm:inline-block mt-2 sm:mt-0">Definitive Durchführung gesichert</span>
-                                                                    ) : (
-                                                                        <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 uppercase tracking-widest font-bold ml-2 block sm:inline-block mt-2 sm:mt-0">Noch {selectedTour.minPlaetze - selectedTour.angemeldet} Anmeldung(en) bis Minimum Teilnehmerzahl erreicht.</span>
-                                                                    )
-                                                                )}
-                                                            </div>
-
-                                                            {selectedTour.guide && (
-                                                                <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center gap-2">
-                                                                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Voraussichtliche Leitung:</span>
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            const guideProfile = teamProfiles.find(p => p.name === selectedTour.guide);
-                                                                            if (guideProfile) setSelectedTeamMember(guideProfile);
-                                                                        }}
-                                                                        className="font-bold underline hover:text-black text-zinc-600 transition-colors text-xs"
-                                                                    >
-                                                                        {selectedTour.guide}
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </Accordion>
-
                                                     <Accordion title="Programm & Ablauf" content={selectedTour.ablauf} />
 
                                                     <Accordion title="Anforderungen & Level">
@@ -1138,29 +1155,27 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                             )}
                                                         </div>
                                                     </Accordion>
-                                                </div>
-                                            )}
+                                                    
+                                                    <Accordion title="Material">
+                                                        <div className="pb-4">
+                                                            {selectedTour.materialUrl ? (
+                                                                <a href={selectedTour.materialUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-zinc-500 mb-4 underline underline-offset-4">
+                                                                    <FileText size={16}/> {selectedTour.materialName || 'Material gemäss PDF'}
+                                                                </a>
+                                                            ) : (
+                                                                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400 mb-4">
+                                                                    <FileText size={16}/> Keine Liste hinterlegt
+                                                                </span>
+                                                            )}
+                                                            <p className="text-zinc-600 font-light text-sm leading-relaxed whitespace-pre-line">{selectedTour.material || 'Keine speziellen Ergänzungen.'}</p>
+                                                        </div>
+                                                    </Accordion>
 
-                                            {!selectedTour.isExample && (
-                                                <div className="grid md:grid-cols-2 gap-6 pt-4">
-                                                    <div className="p-6 bg-[#f9f9f7] border border-zinc-100">
-                                                        <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-3">Material</p>
-                                                        {selectedTour.materialUrl ? (
-                                                            <a href={selectedTour.materialUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-zinc-500 mb-4 underline underline-offset-4">
-                                                                <FileText size={16}/> {selectedTour.materialName || 'Material gemäss PDF'}
-                                                            </a>
-                                                        ) : (
-                                                            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-400 mb-4">
-                                                                <FileText size={16}/> Keine Liste hinterlegt
-                                                            </span>
-                                                        )}
-                                                        <p className="text-xs text-zinc-500 italic leading-relaxed whitespace-pre-line">{selectedTour.material || 'Keine speziellen Ergänzungen.'}</p>
-                                                    </div>
-                                                    <div className="p-6 bg-[#f9f9f7] border border-zinc-100 flex flex-col justify-center">
-                                                        <p className="text-[10px] uppercase tracking-widest text-zinc-400 mb-2">Preis & Leistungen</p>
-                                                        <p className="serif text-3xl italic mb-3">{selectedTour.price}</p>
-                                                        <p className="text-xs text-zinc-500 leading-relaxed whitespace-pre-line">{selectedTour.leistungen || 'Führung durch dipl. Bergführer.'}</p>
-                                                    </div>
+                                                    <Accordion title="Leistungen">
+                                                        <div className="pb-4">
+                                                            <p className="text-zinc-600 font-light text-sm leading-relaxed whitespace-pre-line">{selectedTour.leistungen || 'Führung durch dipl. Bergführer.'}</p>
+                                                        </div>
+                                                    </Accordion>
                                                 </div>
                                             )}
                                         </div>
