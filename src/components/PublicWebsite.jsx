@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, doc, increment, serverTimestamp, onSnapshot, setDoc } from "firebase/firestore";
-import { FileText, Tag, Filter, Search, Info, Hand, X, ChevronLeft, ChevronRight, Instagram, ArrowRight } from 'lucide-react';
+import { FileText, Tag, Filter, Search, Info, Hand, X, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 
 // ==========================================
 // FIREBASE KONFIGURATION
@@ -30,6 +30,11 @@ const loadEmailJS = () => new Promise((resolve, reject) => {
     script.onerror = reject;
     document.head.appendChild(script);
 });
+
+// Instagram Icon als SVG, da es im letzten Schritt verloren ging
+const Instagram = (props) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+);
 
 const DEFAULT_ANGEBOTE = [
     { id: "mock-s1", title: "Hochtouren", season: "Sommer", desc: "Von einfachen Gletschertrekkings bis zu den grossen 4000ern.", longDesc: "Erlebe die Welt der Gletscher und Viertausender. Ob Einsteiger-Tour oder technischer Gipfel – wir führen dich sicher auf die höchsten Punkte der Alpen.", image: "/hochtour.jpg" },
@@ -1047,7 +1052,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                     <div className="fade-in space-y-12 flex-1 flex flex-col">
 
                                         <div className="space-y-8 flex-1">
-                                            {/* NEU: INFO LEISTE (nur für Aktuelle Touren) */}
+                                            {/* INFO LEISTE (nur für Aktuelle Touren) */}
                                             {!selectedTour.isExample && (
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pb-8 border-b border-zinc-100">
                                                     <div>
