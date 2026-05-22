@@ -262,7 +262,10 @@ export default function AdminArea({ user, touren = [], onLogout }) {
       try {
           const fileRef = ref(storage, url);
           await deleteObject(fileRef);
-      } catch (e) { console.error("Konnte Datei nicht aus dem Storage löschen:", url, e); }
+      } catch (e) { 
+          // Fehler abfangen, damit übergeordnete Prozesse (wie hardDelete) nicht abbrechen
+          console.error("Konnte Datei nicht aus dem Storage löschen:", url, e); 
+      }
   };
 
   const moveImage = (array, setArray, idx, dir) => {
@@ -336,18 +339,26 @@ export default function AdminArea({ user, touren = [], onLogout }) {
       
       try {
           let urls = [];
-          if (item.image) urls.push(item.image);
-          if (item.images) urls.push(...item.images);
-          if (item.url && !item.isLink) urls.push(item.url);
-          if (item.fileUrl) urls.push(item.fileUrl);
+          
+          // Sichere Überprüfung auf Arrays und Strings, um TypeErrors zu vermeiden
+          if (typeof item.image === 'string' && item.image) urls.push(item.image);
+          if (Array.isArray(item.images)) urls.push(...item.images);
+          if (typeof item.url === 'string' && item.url && !item.isLink) urls.push(item.url);
+          if (typeof item.fileUrl === 'string' && item.fileUrl) urls.push(item.fileUrl);
 
           const storageUrls = urls.filter(u => u && u.includes('firebasestorage.googleapis.com'));
-          await Promise.all(storageUrls.map(u => deleteStorageFile(u)));
+          
+          // Wir warten auf das Löschen der Dateien, blockieren aber nicht bei Fehlern
+          for (const u of storageUrls) {
+              await deleteStorageFile(u);
+          }
 
+          // Dokument endgültig löschen
           await deleteDoc(doc(db, colName, item.id));
           logAction(`${colName} endgültig gelöscht: ${title}`);
       } catch (e) {
-          alert("Fehler beim endgültigen Löschen.");
+          console.error("Fehler beim endgültigen Löschen:", e);
+          alert(`Fehler beim endgültigen Löschen: ${e.message}`);
       }
   };
 
@@ -1494,15 +1505,37 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                                                         <button onClick={() => setIsEditingKunde(!isEditingKunde)} className={`p-2 rounded-full self-start transition ${isEditingKunde ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>
                                                             {isEditingKunde ? <X size={16}/> : <Edit size={16}/>}
                                                         </button>
-                                                        {/* NEUER LÖSCHEN BUTTON */}
+                                                        {/* DSGVO LÖSCHEN BUTTON */}
                                                         {!currentKunde.isNew && (
                                                             <button onClick={async () => {
-                                                                if(confirm(`Willst du die Adresse von ${currentKunde.vorname} ${currentKunde.name} unwiderruflich aus dem CRM löschen?\n\nHinweis: Bestehende Anmeldungen oder Anfragen bleiben erhalten, aber die zentrale Kundenkartei wird gelöscht.`)) {
-                                                                    await deleteDoc(doc(db, 'kunden_notizen', currentKunde.email));
-                                                                    logAction(`Kunde aus CRM gelöscht: ${currentKunde.email}`);
-                                                                    setSelectedKunde(null);
+                                                                if(confirm(`ACHTUNG DSGVO LÖSCHUNG:\nWillst du ${currentKunde.vorname} ${currentKunde.name} WIRKLICH inklusive ALLER Anmeldungen und Anfragen unwiderruflich aus dem System löschen?`)) {
+                                                                    try {
+                                                                        const emailId = currentKunde.email.toLowerCase().trim();
+                                                                        
+                                                                        // 1. Notizen löschen
+                                                                        await deleteDoc(doc(db, 'kunden_notizen', emailId));
+                                                                        
+                                                                        // 2. Alle Anmeldungen dieses Kunden löschen
+                                                                        for (const a of currentKunde.touren) {
+                                                                            await deleteDoc(doc(db, 'anmeldungen', a.id));
+                                                                            if (!a.isArchived && a.tourId && !a.tourId.startsWith('mock-')) {
+                                                                                await updateDoc(doc(db, 'touren', a.tourId), { angemeldet: increment(-1) });
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        // 3. Alle Anfragen dieses Kunden löschen
+                                                                        for (const anf of currentKunde.anfragen) {
+                                                                            await deleteDoc(doc(db, 'anfragen', anf.id));
+                                                                        }
+                                                                        
+                                                                        logAction(`Kunde komplett gelöscht (DSGVO): ${emailId}`);
+                                                                        setSelectedKunde(null);
+                                                                    } catch (e) {
+                                                                        console.error("Fehler beim Löschen des Kunden:", e);
+                                                                        alert("Es gab ein Problem beim Löschen. Bitte Konsole prüfen.");
+                                                                    }
                                                                 }
-                                                            }} className="p-2 rounded-full self-start transition bg-red-50 text-red-500 hover:bg-red-500 hover:text-white" title="Kunde löschen">
+                                                            }} className="p-2 rounded-full self-start transition bg-red-50 text-red-500 hover:bg-red-500 hover:text-white" title="Kunde komplett löschen">
                                                                 <Trash2 size={16}/>
                                                             </button>
                                                         )}
