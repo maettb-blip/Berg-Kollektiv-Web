@@ -31,7 +31,7 @@ const loadEmailJS = () => new Promise((resolve, reject) => {
     document.head.appendChild(script);
 });
 
-// Instagram Icon als SVG, da es im letzten Schritt verloren ging
+// Instagram Icon als SVG
 const Instagram = (props) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
 );
@@ -126,6 +126,73 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
     const [isVideoLoaded, setIsVideoLoaded] = useState(false);
     const [hasScrolledGallery, setHasScrolledGallery] = useState(false);
     const [activeHeroVideo, setActiveHeroVideo] = useState('/hero-video.mp4');
+
+    // --- NEUE HOOKS FÜR DEEP LINKING UND SEO ---
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tourId = params.get('tour');
+        const angebotId = params.get('angebot');
+        const teamId = params.get('team');
+
+        if (tourId && touren.length > 0) {
+            const tour = touren.find(t => t.id === tourId);
+            if (tour) setSelectedTour(tour);
+        }
+        
+        if (angebotId && angebote.length > 0) {
+            const angebot = angebote.find(a => a.id === angebotId);
+            if (angebot) setSelectedAngebot(angebot);
+        }
+
+        if (teamId && teamProfiles.length > 0) {
+            const member = teamProfiles.find(m => m.id === teamId);
+            if (member) setSelectedTeamMember(member);
+        }
+    }, [touren, angebote, teamProfiles]);
+
+    useEffect(() => {
+        const url = new URL(window.location);
+        
+        if (selectedTour) {
+            url.searchParams.set('tour', selectedTour.id);
+        } else if (selectedAngebot) {
+            url.searchParams.set('angebot', selectedAngebot.id);
+        } else if (selectedTeamMember) {
+            url.searchParams.set('team', selectedTeamMember.id);
+        } else {
+            url.searchParams.delete('tour');
+            url.searchParams.delete('angebot');
+            url.searchParams.delete('team');
+        }
+        
+        window.history.pushState({}, '', url);
+    }, [selectedTour, selectedAngebot, selectedTeamMember]);
+
+    useEffect(() => {
+        const defaultTitle = "Berg Kollektiv | Berg · Mensch · Erlebnis";
+        const defaultDesc = "Bergführer IVBV. Von einfachen Gletschertrekkings bis zu den grossen 4000ern.";
+        
+        let metaDesc = document.querySelector('meta[name="description"]');
+        if (!metaDesc) {
+            metaDesc = document.createElement('meta');
+            metaDesc.name = "description";
+            document.head.appendChild(metaDesc);
+        }
+
+        if (selectedTour) {
+            document.title = `${selectedTour.title} | Berg Kollektiv`;
+            metaDesc.content = selectedTour.description ? selectedTour.description.substring(0, 150) + "..." : defaultDesc;
+        } else if (selectedAngebot) {
+            document.title = `${selectedAngebot.title} | Berg Kollektiv`;
+            metaDesc.content = selectedAngebot.desc || defaultDesc;
+        } else {
+            document.title = defaultTitle;
+            metaDesc.content = defaultDesc;
+        }
+    }, [selectedTour, selectedAngebot]);
+
+    // --- ENDE NEUE HOOKS ---
 
     useEffect(() => {
         if (websiteSettings.heroVideos && websiteSettings.heroVideos.length > 0) {
@@ -517,7 +584,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         
                         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-20">
                             {recentTours.map(tour => (
-                                <div key={tour.id} className="tour-card group cursor-pointer" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
+                                <article key={tour.id} className="tour-card group cursor-pointer" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
                                     <div className="aspect-[4/5] overflow-hidden bg-zinc-100 mb-6 grayscale group-hover:grayscale-0 transition-all duration-1000 relative">
                                         <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={tour.title} />
                                         <div className="absolute top-4 right-4 bg-white/95 px-4 py-2 text-[8px] uppercase tracking-[0.2em] font-bold">
@@ -537,7 +604,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                </article>
                             ))}
                         </div>
 
@@ -689,7 +756,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         {filteredTours.length > 0 ? (
                             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
                                 {filteredTours.map(tour => (
-                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
+                                    <article key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
                                         <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
                                             <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
                                             <div className="absolute top-4 right-4 bg-white/95 px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
@@ -710,7 +777,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    </article>
                                 ))}
                             </div>
                         ) : (
@@ -814,7 +881,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                         {filteredExampleTours.length > 0 ? (
                             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-16">
                                 {filteredExampleTours.map(tour => (
-                                    <div key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
+                                    <article key={tour.id} className="tour-card group cursor-pointer bg-white p-6 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-zinc-200" onClick={() => { setSelectedTour(tour); setIsBookingMode(false); setIsInquiryMode(false); }}>
                                         <div className="aspect-[4/3] overflow-hidden bg-zinc-100 mb-6 relative">
                                             <img src={tour.image} loading="lazy" decoding="async" className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" alt={tour.title} />
                                             <div className="absolute top-4 left-4 bg-black text-white px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] font-bold">
@@ -832,7 +899,7 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    </article>
                                 ))}
                             </div>
                         ) : (
