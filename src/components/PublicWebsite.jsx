@@ -129,46 +129,92 @@ export default function PublicWebsite({ touren = [], onGoToAdmin }) {
 
     // --- NEUE HOOKS FÜR DEEP LINKING UND SEO ---
 
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const tourId = params.get('tour');
-        const angebotId = params.get('angebot');
-        const teamId = params.get('team');
+    // 1. URL beim allerersten Laden sichern (überlebt das sofortige Überschreiben)
+    const [initialLink] = useState(() => new URLSearchParams(window.location.search));
+    const [hasSyncedDeepLink, setHasSyncedDeepLink] = useState(false);
 
+    // Initialen Deep Link auslesen und Modal öffnen, sobald Daten da sind
+    useEffect(() => {
+        if (hasSyncedDeepLink) return; // Nur ausführen, bis der Link 1x verarbeitet wurde
+
+        const tourId = initialLink.get('tour');
+        const angebotId = initialLink.get('angebot');
+        const teamId = initialLink.get('team');
+
+        // Wenn gar keine Links vorhanden sind, direkt freigeben
+        if (!tourId && !angebotId && !teamId) {
+            setHasSyncedDeepLink(true);
+            return;
+        }
+
+        let matchFound = false;
+
+        // Warten, bis die Daten (touren, angebote, team) aus Firebase geladen wurden
         if (tourId && touren.length > 0) {
             const tour = touren.find(t => t.id === tourId);
-            if (tour) setSelectedTour(tour);
+            if (tour) { setSelectedTour(tour); matchFound = true; }
         }
         
         if (angebotId && angebote.length > 0) {
             const angebot = angebote.find(a => a.id === angebotId);
-            if (angebot) setSelectedAngebot(angebot);
+            if (angebot) { setSelectedAngebot(angebot); matchFound = true; }
         }
 
         if (teamId && teamProfiles.length > 0) {
             const member = teamProfiles.find(m => m.id === teamId);
-            if (member) setSelectedTeamMember(member);
+            if (member) { setSelectedTeamMember(member); matchFound = true; }
         }
-    }, [touren, angebote, teamProfiles]);
 
+        if (matchFound) {
+            setHasSyncedDeepLink(true);
+        }
+
+        // Sicherheits-Fallback: Nach 2 Sekunden den Lock aufheben, 
+        // falls ein veralteter Link aufgerufen wurde, bei dem die ID in Firebase nicht mehr existiert.
+        const timer = setTimeout(() => setHasSyncedDeepLink(true), 2000);
+        return () => clearTimeout(timer);
+        
+    }, [touren, angebote, teamProfiles, hasSyncedDeepLink, initialLink]);
+
+
+    // URL beim Schliessen/Öffnen im Browser anpassen
     useEffect(() => {
+        // WICHTIG: Die URL erst dann bei "null"-Werten überschreiben, wenn der initiale Link geprüft wurde!
+        if (!hasSyncedDeepLink) return;
+
         const url = new URL(window.location);
+        let hasChanges = false;
         
         if (selectedTour) {
             url.searchParams.set('tour', selectedTour.id);
-        } else if (selectedAngebot) {
-            url.searchParams.set('angebot', selectedAngebot.id);
-        } else if (selectedTeamMember) {
-            url.searchParams.set('team', selectedTeamMember.id);
-        } else {
+            hasChanges = true;
+        } else if (url.searchParams.has('tour')) {
             url.searchParams.delete('tour');
+            hasChanges = true;
+        }
+
+        if (selectedAngebot) {
+            url.searchParams.set('angebot', selectedAngebot.id);
+            hasChanges = true;
+        } else if (url.searchParams.has('angebot')) {
             url.searchParams.delete('angebot');
+            hasChanges = true;
+        }
+
+        if (selectedTeamMember) {
+            url.searchParams.set('team', selectedTeamMember.id);
+            hasChanges = true;
+        } else if (url.searchParams.has('team')) {
             url.searchParams.delete('team');
+            hasChanges = true;
         }
         
-        window.history.pushState({}, '', url);
-    }, [selectedTour, selectedAngebot, selectedTeamMember]);
+        if (hasChanges) {
+            window.history.pushState({}, '', url);
+        }
+    }, [selectedTour, selectedAngebot, selectedTeamMember, hasSyncedDeepLink]);
 
+    // Dynamische SEO & Meta-Daten anpassen (bleibt unverändert)
     useEffect(() => {
         const defaultTitle = "Berg Kollektiv | Berg · Mensch · Erlebnis";
         const defaultDesc = "Bergführer IVBV. Von einfachen Gletschertrekkings bis zu den grossen 4000ern.";
