@@ -4,6 +4,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, increment } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import NewsletterEditor from './NewsletterEditor'; // Pfad ggf. anpassen
 import { 
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
   LayoutDashboard, User, Users, X, Edit, ExternalLink, Trash2, MapPin, 
@@ -149,6 +150,8 @@ export default function AdminArea({ user, touren = [], onLogout }) {
   const [materialLists, setMaterialLists] = useState([]);
   const [angebote, setAngebote] = useState([]);
   const [websiteSettings, setWebsiteSettings] = useState({ heroVideos: [], categoryOrder: [] });
+  const [newsletters, setNewsletters] = useState([]);
+  const [editingNewsletter, setEditingNewsletter] = useState(null);
   
   // Dynamische Settings
   const [docKategorien, setDocKategorien] = useState(['Rechnungen', 'Konzepte', 'Sponsoring', 'Bilder']);
@@ -247,6 +250,23 @@ export default function AdminArea({ user, touren = [], onLogout }) {
     ];
     return () => unsubs.forEach(unsub => unsub());
   }, [user]);
+  import { query, orderBy, onSnapshot } from 'firebase/firestore'; // Falls orderBy/query noch nicht importiert sind
+
+    useEffect(() => {
+    // Query erstellt eine Liste, sortiert nach Datum absteigend (neueste zuerst)
+    const q = query(collection(db, 'newsletters'), orderBy('datum', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const nlData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+        }));
+        setNewsletters(nlData);
+    });
+
+    // Listener aufräumen, wenn die Komponente unmounted wird
+    return () => unsubscribe();
+    }, []); // Leeres Array bedeutet, das läuft einmal beim Starten der AdminArea
 
   const teamMemberNames = [...new Set([...teamProfiles.filter(t => !t.isDeleted).map(t => t.name), 'Allgemein'])];
 
@@ -1007,6 +1027,15 @@ export default function AdminArea({ user, touren = [], onLogout }) {
               <button onClick={() => setAdminSubView('aufgaben')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'aufgaben' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Kanban size={14}/> Aufgaben</button>
               <button onClick={() => setAdminSubView('dokumente')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'dokumente' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Folder size={14}/> Dokumente</button>
               <button onClick={() => setAdminSubView('protokolle')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'protokolle' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><BookOpen size={14}/> Protokolle & Ideen</button>
+              <button 
+                className={adminSubView === 'newsletter' ? 'active' : ''} 
+                onClick={() => {
+                    setAdminSubView('newsletter');
+                    setEditingNewsletter(null); // Setzt den Editor auf "Neuer Entwurf" zurück
+                }}
+                >
+                📰 Newsletter Generator
+                </button>
             </div>
 
             <div className="space-y-1">
@@ -1438,6 +1467,53 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                 </div>
             )}
 
+            {adminSubView === 'newsletter' && (
+            <div className="newsletter-dashboard" style={{ display: 'flex', gap: '2rem' }}>
+                
+                {/* LINKE SPALTE: Liste der Entwürfe */}
+                <div className="newsletter-list" style={{ width: '250px', borderRight: '1px solid #ddd', paddingRight: '1rem' }}>
+                <h3>Gespeicherte Entwürfe</h3>
+                <button 
+                    onClick={() => setEditingNewsletter(null)}
+                    style={{ width: '100%', marginBottom: '1rem' }}
+                >
+                    + Neuer Newsletter
+                </button>
+
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                    {newsletters.map(nl => (
+                    <li 
+                        key={nl.id} 
+                        onClick={() => setEditingNewsletter(nl)}
+                        style={{ 
+                        padding: '10px', 
+                        cursor: 'pointer', 
+                        background: editingNewsletter?.id === nl.id ? '#eee' : 'transparent',
+                        borderBottom: '1px solid #eee'
+                        }}
+                    >
+                        <strong>{nl.betreff || 'Ohne Betreff'}</strong><br/>
+                        <small>
+                        {nl.datum ? nl.datum.toDate().toLocaleDateString('de-CH') : 'Neu'} - {nl.status}
+                        </small>
+                    </li>
+                    ))}
+                    {newsletters.length === 0 && <p><small>Noch keine Entwürfe vorhanden.</small></p>}
+                </ul>
+                </div>
+
+                {/* RECHTE SPALTE: Der Editor */}
+                <div className="newsletter-editor-wrapper" style={{ flex: 1 }}>
+                <NewsletterEditor 
+                    db={db} 
+                    editingNewsletter={editingNewsletter} 
+                    clearEditMode={() => setEditingNewsletter(null)} 
+                />
+                </div>
+
+            </div>
+            )}
+            
             {adminSubView === 'kunden' && (
                 <div className="fade-in w-full max-w-[1600px] mx-auto">
                     {!selectedKunde ? (
