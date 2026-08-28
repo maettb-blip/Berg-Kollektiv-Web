@@ -1466,54 +1466,55 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                     </div>
                 </div>
             )}
-
+            
             {adminSubView === 'newsletter' && (
             <div className="newsletter-dashboard" style={{ display: 'flex', gap: '2rem' }}>
                 
                 {/* LINKE SPALTE: Liste der Entwürfe */}
                 <div className="newsletter-list" style={{ width: '250px', borderRight: '1px solid #ddd', paddingRight: '1rem' }}>
-                <h3>Gespeicherte Entwürfe</h3>
-                <button 
-                    onClick={() => setEditingNewsletter(null)}
-                    style={{ width: '100%', marginBottom: '1rem' }}
-                >
-                    + Neuer Newsletter
-                </button>
-
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                    {newsletters.map(nl => (
-                    <li 
-                        key={nl.id} 
-                        onClick={() => setEditingNewsletter(nl)}
-                        style={{ 
-                        padding: '10px', 
-                        cursor: 'pointer', 
-                        background: editingNewsletter?.id === nl.id ? '#eee' : 'transparent',
-                        borderBottom: '1px solid #eee'
-                        }}
+                    <h3>Gespeicherte Entwürfe</h3>
+                    <button 
+                        onClick={() => setEditingNewsletter(null)}
+                        style={{ width: '100%', marginBottom: '1rem' }}
+                        className="bg-black text-white p-2 text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition"
                     >
-                        <strong>{nl.betreff || 'Ohne Betreff'}</strong><br/>
-                        <small>
-                        {nl.datum ? nl.datum.toDate().toLocaleDateString('de-CH') : 'Neu'} - {nl.status}
-                        </small>
-                    </li>
-                    ))}
-                    {newsletters.length === 0 && <p><small>Noch keine Entwürfe vorhanden.</small></p>}
-                </ul>
+                        + Neuer Newsletter
+                    </button>
+
+                    <ul style={{ listStyle: 'none', padding: 0 }}>
+                        {newsletters.map(nl => (
+                        <li 
+                            key={nl.id} 
+                            onClick={() => setEditingNewsletter(nl)}
+                            style={{ 
+                            padding: '10px', 
+                            cursor: 'pointer', 
+                            background: editingNewsletter?.id === nl.id ? '#eee' : 'transparent',
+                            borderBottom: '1px solid #eee'
+                            }}
+                        >
+                            <strong>{nl.betreff || 'Ohne Betreff'}</strong><br/>
+                            <small>
+                            {nl.datum ? nl.datum.toDate().toLocaleDateString('de-CH') : ''}
+                            </small>
+                        </li>
+                        ))}
+                    </ul>
                 </div>
 
-                {/* RECHTE SPALTE: Der Editor */}
-                <div className="newsletter-editor-wrapper" style={{ flex: 1 }}>
-                <NewsletterEditor 
-                    db={db} 
-                    editingNewsletter={editingNewsletter} 
-                    clearEditMode={() => setEditingNewsletter(null)} 
-                />
+                {/* RECHTE SPALTE: Hier kommt dein Newsletter-Fenster (Editor) hin! */}
+                <div className="newsletter-editor" style={{ flex: 1 }}>
+                    <NewsletterEditor 
+                        // Hier übergibst du den aktuell ausgewählten Entwurf an den Editor
+                        currentNewsletter={editingNewsletter} 
+                        // Eventuelle weitere Props, die dein Editor benötigt:
+                        // onSave={...} 
+                    />
                 </div>
 
             </div>
             )}
-            
+
             {adminSubView === 'kunden' && (
                 <div className="fade-in w-full max-w-[1600px] mx-auto">
                     {!selectedKunde ? (
