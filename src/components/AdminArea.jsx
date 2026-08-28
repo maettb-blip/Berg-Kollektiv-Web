@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc, getFirestore, increment, query, orderBy } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, increment } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+
 import NewsletterEditor from './NewsletterEditor'; // Pfad ggf. anpassen
 import { 
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
@@ -250,7 +250,6 @@ export default function AdminArea({ user, touren = [], onLogout }) {
     ];
     return () => unsubs.forEach(unsub => unsub());
   }, [user]);
-  import { query, orderBy, onSnapshot } from 'firebase/firestore'; // Falls orderBy/query noch nicht importiert sind
 
     useEffect(() => {
     // Query erstellt eine Liste, sortiert nach Datum absteigend (neueste zuerst)
