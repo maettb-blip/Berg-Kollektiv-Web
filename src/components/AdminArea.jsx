@@ -1510,9 +1510,14 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                         // onSave={...} 
                     />
                 </div>
-
             </div>
             )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
             {adminSubView === 'kunden' && (
                 <div className="fade-in w-full max-w-[1600px] mx-auto">
