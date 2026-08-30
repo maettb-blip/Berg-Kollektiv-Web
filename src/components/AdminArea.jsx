@@ -3,7 +3,7 @@ import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc, getF
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, increment } from "firebase/firestore";
-
+import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage } from "firebase/storage";
 import NewsletterEditor from './NewsletterEditor'; // Pfad ggf. anpassen
 import { 
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
@@ -1027,13 +1027,13 @@ export default function AdminArea({ user, touren = [], onLogout }) {
               <button onClick={() => setAdminSubView('dokumente')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'dokumente' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Folder size={14}/> Dokumente</button>
               <button onClick={() => setAdminSubView('protokolle')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'protokolle' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><BookOpen size={14}/> Protokolle & Ideen</button>
               <button 
-                className={adminSubView === 'newsletter' ? 'active' : ''} 
-                onClick={() => {
-                    setAdminSubView('newsletter');
-                    setEditingNewsletter(null); // Setzt den Editor auf "Neuer Entwurf" zurück
-                }}
+                    onClick={() => {
+                        setAdminSubView('newsletter');
+                        setEditingNewsletter(null); // Setzt den Editor auf "Neuer Entwurf" zurück
+                    }}
+                    className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'newsletter' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}
                 >
-                📰 Newsletter Generator
+                    <Mail size={14}/> Newsletter Generator
                 </button>
             </div>
 
@@ -1512,12 +1512,6 @@ export default function AdminArea({ user, touren = [], onLogout }) {
                 </div>
             </div>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
             {adminSubView === 'kunden' && (
                 <div className="fade-in w-full max-w-[1600px] mx-auto">
