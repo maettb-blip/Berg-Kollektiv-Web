@@ -1027,13 +1027,13 @@ export default function AdminArea({ user, touren = [], onLogout }) {
               <button onClick={() => setAdminSubView('dokumente')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'dokumente' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><Folder size={14}/> Dokumente</button>
               <button onClick={() => setAdminSubView('protokolle')} className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'protokolle' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}><BookOpen size={14}/> Protokolle & Ideen</button>
               <button 
-                    onClick={() => {
-                        setAdminSubView('newsletter');
-                        setEditingNewsletter(null); // Setzt den Editor auf "Neuer Entwurf" zurück
-                    }}
-                    className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'newsletter' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}
+                onClick={() => {
+                    setAdminSubView('newsletter');
+                    setEditingNewsletter(null);
+                }}
+                className={`w-full flex items-center gap-3 py-2 px-4 text-[10px] uppercase tracking-widest transition-all ${adminSubView === 'newsletter' ? 'bg-zinc-200 text-black font-bold' : 'hover:bg-zinc-100'}`}
                 >
-                    <Mail size={14}/> Newsletter Generator
+                <Mail size={14}/> Newsletter
                 </button>
             </div>
 
