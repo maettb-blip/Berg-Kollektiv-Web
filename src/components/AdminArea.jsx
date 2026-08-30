@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc, getFirestore, increment, query, orderBy } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, increment } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage } from "firebase/storage";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import NewsletterEditor from './NewsletterEditor'; // Pfad ggf. anpassen
 import { 
   Search, Mail, Download, Settings, Plus, Kanban, Folder, BookOpen, 
